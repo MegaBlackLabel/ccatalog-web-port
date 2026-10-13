@@ -1,0 +1,15 @@
+[tools]
+bun = "1.3.11"
+node = "25.8.1"
+
+[tasks.dev]
+run = "bun run dev"
+
+[tasks.build]
+run = "bun run build"
+
+[tasks.test]
+run = "bun run test"
+
+[tasks.typecheck]
+run = "bun run typecheck"

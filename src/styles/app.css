@@ -1,0 +1,159 @@
+/* アプリ全体の下地。Windows 98 のデスクトップ (ティール) と、
+   react98retro が前提にしているフォントスタックを用意する。 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.desktop {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #008080;
+  color: #000;
+  font-family: 'Pixelated MS Sans Serif', 'DotGothic16', 'MS Gothic', 'MS UI Gothic', Arial, sans-serif;
+}
+
+/* ウィンドウの重なり順はライブラリの Window が持つ inline z-index
+   (既定 1、クリックで前面化) に任せる。ここで data-testid に対して z-index を
+   指定すると、ライブラリの inline 値と競合してダイアログが背面に回るので触らない。 */
+
+/* 98.css の .window-body は高さを持たないので、チェックリストウィンドウだけ
+   縦 flex の土台にしてタブパネル (Tabs の fill) をウィンドウいっぱいに伸ばす。 */
+[data-testid='checklist-window'] > .window-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* メニューの文字は実物 (MS ゴシック 12px 相当) に合わせる。
+   ライブラリのメニュー項目は 11px で、メニューバー本体 (12px) より小さく見える。 */
+[role='menubar'] [role='menuitem'] {
+  font-size: 12px;
+}
+
+/* ボタン・コンボ・エディットの文字も実物 (MS ゴシック 12px 相当) に合わせる。
+   ライブラリの配布 CSS は 98.css の基本フォント規則が `.win98 .win98` の二重スコープに
+   なっていて当たらないため、フォーム部品だけブラウザ既定 (13.33px Arial) のままになる。
+   ライブラリが意図しているのと同じフォント スタックと大きさをここで当てる。 */
+.win98 button,
+.win98 input,
+.win98 select,
+.win98 textarea {
+  -webkit-font-smoothing: none;
+  font-family: 'MS UI Gothic', 'MS PGothic', 'Pixelated MS Sans Serif', DotGothic16, Arial,
+    sans-serif;
+  font-size: 12px;
+}
+
+/* チェックリストの表 (1WINDOW/3CHECK.HTM)。実物は 1 行 17px の横罫線と
+   列ごとの縦罫線で区切られている。98.css の table は罫線を持たないので、
+   このウィンドウに限って足す。ライブラリの CSS モジュールが付ける
+   ハッシュ付きクラス名には依存せず、表のセマンティックな要素だけを見る。
+   .window-body を挟むのは、98.css の `table>tbody>tr>*` より確実に
+   強くするため (読み込み順に依存しない)。
+   罫線の色 #d4d0c8 は実物のチェックリストの画像から 1px 単位で実測した値
+   (データ領域の縦罫線 x=203 と横罫線 y=113 が共に rgb(212, 208, 200)。
+   実物は白地の行を銀色の 1px 罫線で区切っている)。 */
+[data-testid='checklist-window'] > .window-body table > thead > tr > *,
+[data-testid='checklist-window'] > .window-body table > tbody > tr > * {
+  border-right: 1px solid #d4d0c8;
+  border-bottom: 1px solid #d4d0c8;
+}
+
+/* 行の高さは罫線を含めて 17px (98.css の tbody は 14px)。box-sizing は
+   app.css の `*` で border-box なので、罫線を引いても 17px のまま収まる。 */
+[data-testid='checklist-window'] > .window-body table > tbody > tr > * {
+  height: 17px;
+  line-height: 16px;
+}
+
+/* 表の右端はウィンドウの枠 (sunken-panel) が受け持つので二重線にしない。 */
+[data-testid='checklist-window'] > .window-body table > thead > tr > *:last-child,
+[data-testid='checklist-window'] > .window-body table > tbody > tr > *:last-child {
+  border-right: 0;
+}
+
+/* サークル一覧の表 (1WINDOW/6LIST.HTM)。実物はチェックリストと同じく 1 行 17px で、
+   行の下と列の右を 1px の罫線で区切る。色はチェックリストと同じ実測値 #d4d0c8
+   (白地の行を銀色 1px 罫線で区切る)。
+   このウィンドウの data-testid は Window の外側の div にあるので、チェックリストの
+   `> .window-body` ではなく子孫セレクタで指す (列の見出し行も同じ罫線で区切る)。 */
+[data-testid='list-window'] .window-body table > thead > tr > *,
+[data-testid='list-window'] .window-body table > tbody > tr > * {
+  border-right: 1px solid #d4d0c8;
+  border-bottom: 1px solid #d4d0c8;
+}
+
+/* 行の高さは罫線を含めて 17px (98.css の tbody は 14px)。box-sizing は
+   app.css の `*` で border-box なので、罫線を引いても 17px のまま収まる。 */
+[data-testid='list-window'] .window-body table > tbody > tr > * {
+  height: 17px;
+  line-height: 16px;
+}
+
+/* 表の右端はウィンドウの枠 (sunken-panel) が受け持つので二重線にしない。 */
+[data-testid='list-window'] .window-body table > thead > tr > *:last-child,
+[data-testid='list-window'] .window-body table > tbody > tr > *:last-child {
+  border-right: 0;
+}
+
+/* 実物の「表示ツールバー」は 1 本で、中に拡大率の Edit が入っている。
+   Web 版は Toolbar を 2 本に分けて Edit を挟むので、2 本目以降のグリップは消して
+   1 本のツールバーに見せる。 */
+[data-testid='main-window'] [data-testid^='toolbar-group-'] [role='toolbar'] ~ [role='toolbar'] > div:first-child {
+  display: none;
+}
+
+/* マップウィンドウ (会場マップ) のツールバーも、実物は 1 本のツールバーの中に
+   拡大率の Edit が入っている。サークルカットウィンドウと同じく Toolbar を 2 本に
+   分けて Edit を挟むので、グリップを消して 1 本の行に見せる。行の先頭は地図の
+   ComboBox なので、Toolbar のグリップは要らない。 */
+[data-testid='map-toolbar'] [role='toolbar'] > div:first-child {
+  display: none;
+}
+
+/* ツールバーの区切り線 (縦) の高さは 5 ウィンドウ共通の 18px に揃える
+   (ui/main/toolbar-groove.ts の TOOLBAR_SEPARATOR_STYLE がライブラリの CSS 変数
+   `--win98-toolbar-separator-height` で同じ値を渡し、ライブラリの Toolbar の
+   .separator も既定 18px。実測はサークル詳細ウィンドウの x 127..128, y 35..52)。
+   帯が折り返したときの段間の溝 (ライブラリの ToolbarBand が挿す横の Groove) は
+   高さ 0 + 上下 1px 罫線の 2px なので、aria-orientation で縦の区切り線だけに絞る
+   (絞らないと段間の溝が 18px に伸びて段の間が開く)。 */
+[data-testid$='-toolbar'] [role='separator'][aria-orientation='vertical'] {
+  height: 18px;
+}
+
+/* ツールバーのアイコンは実物のビットマップ (PE の RT_BITMAP 130 = 16x15) の寸法で置く。
+   ライブラリの Toolbar は img に width/height 16 を固定で付けるため、そのままだと
+   1px 縦に伸びる (サークルカット / 会場マップ のツールバーだけ)。
+   アイコン (base64 の SVG) だけを対象にし、色ボタンの色矩形 (data URI の SVG を
+   16x16 で置く) はそのまま残す。 */
+[data-testid$='-toolbar'] [role='toolbar'] button img[src^='data:image/svg+xml;base64,'] {
+  height: 15px;
+}
+
+/* ツールバーのボタンのホバー (浮き出し) と押下 (沈み)。サークルカット ウィンドウの
+   ボタンはライブラリの Toolbar (Toolbar.module.css の .toolbarButton) が持つ見た目だが、
+   他の 4 ウィンドウ (チェックリスト / サークル一覧 / サークル詳細 / 会場マップ) のボタンは
+   アプリ側が inline style で平らな見た目を持っているため、ホバーが付いていなかった。
+   ライブラリと同じ色を !important で当てる (inline style より優先させるため)。
+   押下状態 (aria-pressed のロック ボタン) は inline の沈みを優先して触らない。 */
+[data-testid$='-toolbar'] button:hover:not(:disabled):not([aria-pressed='true']) {
+  border-color: #ffffff #808080 #808080 #ffffff !important;
+}
+
+[data-testid$='-toolbar'] button:active:not(:disabled):not([aria-pressed='true']) {
+  border-color: #808080 #ffffff #ffffff #808080 !important;
+}
