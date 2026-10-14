@@ -5,14 +5,10 @@ import type { ExportResultDialogProps } from '../dialog/ExportResultDialog';
 import { ExportResultDialog } from '../dialog/ExportResultDialog';
 import { ImageFileOutputDialog } from './ImageFileOutputDialog';
 import type { ImageFileOutputDialogProps } from './ImageFileOutputDialog';
-import type { ImageFormat } from './ImageFileOutputDialog';
 import { PrintPreviewWindow } from './PrintPreviewWindow';
 import type { PrintPreviewWindowProps } from './PrintPreviewWindow';
 import { PrintProgressDialog } from './PrintProgressDialog';
 import type { PrintProgressDialogProps } from './PrintProgressDialog';
-
-/** ダイアログ 197 の出力ファイル形式 (BMP / PNG / JPG)。 */
-const ALL_FORMATS: readonly ImageFormat[] = ['bmp', 'png', 'jpg'];
 
 function renderPreview(overrides: Partial<PrintPreviewWindowProps> = {}) {
   const props: PrintPreviewWindowProps = {
@@ -21,7 +17,6 @@ function renderPreview(overrides: Partial<PrintPreviewWindowProps> = {}) {
     zoom: 1,
     onZoomChange: vi.fn(),
     onPageChange: vi.fn(),
-    onPrint: vi.fn(),
     onClose: vi.fn(),
     ...overrides,
   };
@@ -43,13 +38,21 @@ function renderProgress(overrides: Partial<PrintProgressDialogProps> = {}) {
 
 function renderImageOutput(overrides: Partial<ImageFileOutputDialogProps> = {}) {
   const props: ImageFileOutputDialogProps = {
-    format: 'bmp',
     directory: 'C:\\dump',
-    pageFrom: 1,
-    pageTo: 3,
+    baseName: 'ccatalog',
+    format: 'bmp',
+    longSide: 0,
+    highResolution: false,
+    allPages: true,
+    pageSpec: '1',
+    outputFormat: 'list',
+    noGdiPlus: false,
     maxPage: 10,
     onChange: vi.fn(),
     onOutput: vi.fn(),
+    onPreview: vi.fn(),
+    onOpenDetails: vi.fn(),
+    onHelp: vi.fn(),
     onClose: vi.fn(),
     ...overrides,
   };
@@ -105,16 +108,61 @@ describe('PrintPreviewWindow (ダイアログ 300)', () => {
     expect(screen.getByRole('button', { name: '次頁' })).toBeDisabled();
   });
 
-  it('ZOOM 2 で onZoomChange(2) を呼ぶ', async () => {
+  it('表示倍率は 1/4 倍〜4 倍の 5 段を 1 段ずつ送る (幅 / 高さ / 元のサイズは等倍)', async () => {
     const { user, props } = renderPreview({ zoom: 1 });
-    await user.click(screen.getByRole('button', { name: 'ZOOM 2' }));
-    expect(props.onZoomChange).toHaveBeenCalledWith(2);
+
+    await user.click(screen.getByRole('button', { name: 'ズームイン' }));
+    expect(props.onZoomChange).toHaveBeenLastCalledWith(2);
+    await user.click(screen.getByRole('button', { name: 'ズームアウト' }));
+    expect(props.onZoomChange).toHaveBeenLastCalledWith(0.5);
+
+    for (const label of ['幅に合わせる', '高さに合わせる', '元のサイズ']) {
+      await user.click(screen.getByRole('button', { name: label }));
+      expect(props.onZoomChange).toHaveBeenLastCalledWith(1);
+    }
   });
 
-  it('印刷で onPrint を呼ぶ', async () => {
-    const { user, props } = renderPreview();
-    await user.click(screen.getByTestId('preview-print'));
-    expect(props.onPrint).toHaveBeenCalledTimes(1);
+  it('ボタン列はプレビュー面の上にあり、CHM 4PRINT/5PREVIEW.HTM の並びで出る (倍率 / 前頁 / ページ指定 / 次頁 / 閉じる)', () => {
+    renderPreview();
+
+    const row = screen.getByTestId('preview-button-row');
+    // 実物ツールバーと同じくアイコン ボタン (16x16 の SVG) で、名前は aria-label が持つ。
+    expect([...row.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual([
+      'ズームアウト',
+      'ズームイン',
+      '幅に合わせる',
+      '高さに合わせる',
+      '元のサイズ',
+      '前頁',
+      '次頁',
+      '閉じる',
+    ]);
+    // 倍率とページ送りはアイコン (実物ツールバーの SVG)、閉じるだけ文字。
+    for (const button of row.querySelectorAll('button')) {
+      const icon = button.querySelector('img');
+      if (button.getAttribute('aria-label') === '閉じる') expect(icon).toBeNull();
+      else expect(icon?.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
+    }
+    // 元実装のプレビューに印刷ボタンは無い。
+    expect(within(row).queryByRole('button', { name: '印刷' })).toBeNull();
+    // ボタン列はプレビュー面・ステータスバーより上にある。
+    const area = screen.getByTestId('preview-area');
+    expect(row.compareDocumentPosition(area) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const input = screen.getByTestId('preview-page-input');
+    expect(input.closest('[data-ctrl-id="3011"]')).toBeNull();
+  });
+
+  it('ページ指定ボックスは Enter でそのページを要求する (範囲外は丸める)', async () => {
+    const { user, props } = renderPreview({ pageNo: 2, pageCount: 5 });
+    const input = screen.getByTestId('preview-page-input');
+
+    await user.clear(input);
+    await user.type(input, '4{Enter}');
+    expect(props.onPageChange).toHaveBeenLastCalledWith(4);
+
+    await user.clear(input);
+    await user.type(input, '9{Enter}');
+    expect(props.onPageChange).toHaveBeenLastCalledWith(5);
   });
 
   it('閉じるで onClose を呼ぶ', async () => {
@@ -178,19 +226,29 @@ describe('PrintProgressDialog (ダイアログ 181 / 301)', () => {
 });
 
 describe('ImageFileOutputDialog (ダイアログ 197)', () => {
-  it('出力パス・形式・出力範囲のコントロールを持つ', () => {
+  it('元実装のコントロールを持つ (508 x 405)', () => {
     const { dialog } = renderImageOutput();
+
+    const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
+    expect(root.style.width).toBe('508px');
+    expect(root.style.height).toBe('405px');
+
     expect(screen.getByTestId('image-output-directory')).toHaveValue('C:\\dump');
-    expect(within(dialog).getByRole('radio', { name: 'BMP' })).toBeChecked();
-    expect(within(dialog).getByRole('radio', { name: 'PNG' })).not.toBeChecked();
-    expect(screen.getByTestId('image-output-page-from')).toHaveValue(1);
-    expect(screen.getByTestId('image-output-page-to')).toHaveValue(3);
+    expect(screen.getByTestId('image-output-name')).toHaveValue('ccatalog');
+    expect(screen.getByTestId('image-output-format')).toHaveValue('bmp');
+    expect(screen.getByTestId('image-output-long-side')).toHaveValue('0');
+    expect(screen.getByTestId('image-output-pages')).toHaveValue('1');
+    expect(screen.getByTestId('image-output-pages')).toBeDisabled();
+    // 出力パスの「参照...」はブラウザからフォルダを辿れないので無効。
     expect(screen.getByRole('button', { name: '参照...' })).toBeDisabled();
   });
 
-  it('元のコントロール ID を保つ (197 の主要コントロール)', () => {
+  it('元のコントロール ID を保つ (197 のコントロール)', () => {
     const { dialog } = renderImageOutput();
-    for (const controlId of [1, 2, 1072, 1075, 1630, 1631, 1637, 1639, 1751, 1752]) {
+    for (const controlId of [
+      1, 2, 1042, 1046, 1048, 1049, 1051, 1052, 1053, 1056, 1058, 1072, 1075,
+      1630, 1631, 1632, 1633, 1637, 1639, 1646, 1705, 1751, 1752,
+    ]) {
       expect(
         dialog.querySelector(`[data-ctrl-id="${controlId}"]`),
         String(controlId),
@@ -198,59 +256,116 @@ describe('ImageFileOutputDialog (ダイアログ 197)', () => {
     }
   });
 
-  it('PNG を選ぶと onChange({ format: "png" }) を呼ぶ', async () => {
+  it('出力ファイル形式を変えると onChange と注意書きの拡張子が変わる', async () => {
     const { user, props } = renderImageOutput();
-    await user.click(screen.getByRole('radio', { name: 'PNG' }));
+
+    await user.selectOptions(screen.getByTestId('image-output-format'), 'png');
+
     expect(props.onChange).toHaveBeenCalledWith({ format: 'png' });
   });
 
-  it.each(ALL_FORMATS)('%s の拡張子を注意書きに出す', (format) => {
+  it.each(['bmp', 'png', 'jpg'] as const)('%s の拡張子を注意書きに出す', (format) => {
     renderImageOutput({ format });
     expect(screen.getByTestId('image-output-note')).toHaveTextContent(
       `※ ページ番号と拡張子".${format}"が付加されます。`,
     );
   });
 
-  it('範囲内のページ入力は onChange に反映する', async () => {
-    const { user, props } = renderImageOutput({ pageFrom: 2, pageTo: 3, maxPage: 5 });
-    const from = screen.getByTestId('image-output-page-from');
-    await user.clear(from);
-    await user.type(from, '4');
-    expect(props.onChange).toHaveBeenCalledWith({ pageFrom: 4 });
+  it('長辺のサイズは 0〜9999 のときだけ onChange に出す', async () => {
+    const onChange = vi.fn();
+    const { user } = renderImageOutput({ onChange });
+    const input = screen.getByTestId('image-output-long-side');
+
+    await user.clear(input);
+    await user.type(input, '1200');
+    expect(onChange).toHaveBeenLastCalledWith({ longSide: 1200 });
+
+    onChange.mockClear();
+    await user.clear(input);
+    await user.type(input, '10000');
+    expect(onChange).not.toHaveBeenCalledWith({ longSide: 10000 });
+
+    onChange.mockClear();
+    await user.clear(input);
+    await user.type(input, 'abc');
+    expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('範囲外や数値でないページ入力では onChange を呼ばない', async () => {
-    const { user, props } = renderImageOutput({ pageFrom: 2, pageTo: 3, maxPage: 5 });
-    const to = screen.getByTestId('image-output-page-to');
-    await user.clear(to);
-    await user.type(to, '0');
-    expect(props.onChange).not.toHaveBeenCalled();
-    await user.clear(to);
-    await user.type(to, '999');
-    expect(props.onChange).not.toHaveBeenCalled();
-    await user.clear(to);
-    await user.type(to, 'abc');
-    expect(props.onChange).not.toHaveBeenCalled();
-  });
-
-  it('出力で onOutput を呼ぶ', async () => {
-    const { user, props } = renderImageOutput({ pageFrom: 1, pageTo: 3 });
-    await user.click(screen.getByTestId('image-output-submit'));
-    expect(props.onOutput).toHaveBeenCalledTimes(1);
-    expect(props.onChange).not.toHaveBeenCalled();
-  });
-
-  it('開始ページが終了ページより大きいときは入れ替えて出力する', async () => {
-    const { user, props } = renderImageOutput({ pageFrom: 5, pageTo: 2, maxPage: 10 });
-    await user.click(screen.getByTestId('image-output-submit'));
-    expect(props.onChange).toHaveBeenCalledWith({ pageFrom: 2, pageTo: 5 });
-    expect(props.onOutput).toHaveBeenCalledTimes(1);
-  });
-
-  it('閉じるで onClose を呼ぶ', async () => {
+  it('出力範囲は「すべて」が既定で、ページ指定にすると onChange に出す', async () => {
     const { user, props } = renderImageOutput();
-    await user.click(screen.getByTestId('image-output-close'));
+
+    expect(screen.getByRole('radio', { name: 'すべて' })).toBeChecked();
+    expect(screen.getByTestId('image-output-pages')).toBeDisabled();
+
+    await user.click(screen.getByRole('radio', { name: 'ページ指定 :' }));
+
+    expect(props.onChange).toHaveBeenCalledWith({ allPages: false });
+  });
+
+  it('ページ指定のときはページ番号を入力できる', () => {
+    renderImageOutput({ allPages: false, pageSpec: '1, 3-5' });
+
+    expect(screen.getByRole('radio', { name: 'ページ指定 :' })).toBeChecked();
+    const input = screen.getByTestId('image-output-pages');
+    expect(input).toBeEnabled();
+    expect(input).toHaveValue('1, 3-5');
+  });
+
+  it('有効範囲とページ指定の説明を出す', () => {
+    renderImageOutput({ maxPage: 108 });
+    expect(screen.getByText('（有効範囲 : 1-108）')).toBeInTheDocument();
+    expect(
+      screen.getByText('ページ番号・範囲を、コンマ区切りで入力してください （例 : 1, 3-5）'),
+    ).toBeInTheDocument();
+  });
+
+  it('出力形式を選ぶと onChange に出す', async () => {
+    const { user, props } = renderImageOutput();
+    expect(screen.getByTestId('image-output-dialog')).toHaveTextContent(
+      'チェックリストに登録されているサークルを、画像なしの一覧表形式で印刷します。',
+    );
+
+    await user.click(screen.getByRole('radio', { name: '白地図印刷' }));
+
+    expect(props.onChange).toHaveBeenCalledWith({ outputFormat: 'blankMap' });
+  });
+
+  it.each([
+    ['blankMap', 'マップのみを印刷します。'],
+    ['cut', 'チェックリストに登録されているサークルを、サークルカット画像付きで印刷します。'],
+    ['map', 'マップを、チェックリストに登録されているサークルの配置情報と共に印刷します。'],
+  ] as const)('出力形式 %s の説明を出す', (outputFormat, description) => {
+    renderImageOutput({ outputFormat });
+    expect(screen.getByText(description)).toBeInTheDocument();
+  });
+
+  it('OK / キャンセル / プレビュー / 説明 / 詳細設定 を通知する', async () => {
+    const { user, props } = renderImageOutput();
+
+    await user.click(screen.getByTestId('image-output-submit'));
+    expect(props.onOutput).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByTestId('image-output-preview'));
+    expect(props.onPreview).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByTestId('image-output-help'));
+    expect(props.onHelp).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByTestId('image-output-details'));
+    expect(props.onOpenDetails).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByTestId('image-output-cancel'));
     expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('高解像度で出力と GDI+ を使用しないで印刷を切り替える', async () => {
+    const { user, props } = renderImageOutput();
+
+    await user.click(screen.getByLabelText('高解像度で出力'));
+    expect(props.onChange).toHaveBeenCalledWith({ highResolution: true });
+
+    await user.click(screen.getByLabelText('GDI+を使用しないで印刷'));
+    expect(props.onChange).toHaveBeenCalledWith({ noGdiPlus: true });
   });
 });
 

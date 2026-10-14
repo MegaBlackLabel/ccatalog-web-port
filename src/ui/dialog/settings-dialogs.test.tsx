@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_APP_SETTINGS,
+  DEFAULT_CHECK_COLOR_SETTINGS,
   DEFAULT_GOOGLE_SEARCH_SETTINGS,
+  DEFAULT_IMAGE_PATH_SETTINGS,
+  DEFAULT_LIST_DISPLAY_SETTINGS,
   DEFAULT_PAGE_SETUP,
 } from '../../domain/app-settings';
 import type { GoogleSearchSettings, PageSetup } from '../../domain/app-settings';
@@ -26,7 +29,13 @@ function byControlId(root: HTMLElement, controlId: number): HTMLElement {
 function renderPreferences(overrides: Partial<PreferencesDialogProps> = {}) {
   const props: PreferencesDialogProps = {
     settings: DEFAULT_APP_SETTINGS,
+    imagePath: DEFAULT_IMAGE_PATH_SETTINGS,
+    listDisplay: DEFAULT_LIST_DISPLAY_SETTINGS,
+    checkColors: DEFAULT_CHECK_COLOR_SETTINGS,
     onChange: vi.fn(),
+    onImagePathChange: vi.fn(),
+    onListDisplayChange: vi.fn(),
+    onCheckColorsChange: vi.fn(),
     onReset: vi.fn(),
     onClose: vi.fn(),
     ...overrides,

@@ -60,6 +60,15 @@ export type MapWindowProps = {
   onSelect: (id: number | null) => void;
   onOpenDetail: (id: number) => void;
   onClose: () => void;
+  /**
+   * 高解像度表示 (表示メニュー 32867)。既定は ON で、地図はベクター化した SVG を使う。
+   * OFF にすると元の PNG (ダミー画像) に切り替える。
+   */
+  highResolution?: boolean;
+  /** タイトルバーの最小化 (アイコン化)。動作設定 1714「個別窓のアイコン化を連動する」。 */
+  onMinimize?: () => void;
+  /** 「色の設定」の表示色 (動作設定)。未指定なら実物から実測した色。 */
+  checkColors?: readonly string[];
   /** ウィンドウの初期位置とサイズ (アプリ側のレイアウトが決める)。 */
   initialX?: number;
   initialY?: number;
@@ -194,6 +203,9 @@ export function MapWindow({
   onSelect,
   onOpenDetail,
   onClose,
+  onMinimize,
+  checkColors,
+  highResolution = true,
   initialX = 60,
   initialY = 40,
   width = 900,
@@ -213,7 +225,9 @@ export function MapWindow({
   const activeMap = maps.find((map) => map.id === activeMapId) ?? null;
   // 地図画像は public/maps/<filename>.svg (実物の地図をベクター化したもの)。
   // 用意が無い地図は従来の PNG (imageUrl) にフォールバックする。
-  const svgUrl = activeMap === null ? null : assetUrl(`/maps/${activeMap.filename}.svg`);
+  // 表示 > 高解像度表示 (32867) を切ると、最初から PNG (ダミー画像) を使う。
+  const svgUrl =
+    activeMap === null || !highResolution ? null : assetUrl(`/maps/${activeMap.filename}.svg`);
   const imageSrc = svgUrl !== null && svgUrl !== failedImage ? svgUrl : imageUrl;
   // マップ画像の原寸は地図ごとの印刷範囲 (ComiketMap の w/h)。
   const mapWidth = activeMap?.w ?? DEFAULT_MAP_WIDTH;
@@ -319,6 +333,7 @@ export function MapWindow({
       data-testid="map-window"
       title={`会場マップ - ${activeMap?.name ?? ''}`}
       onClose={onClose}
+      onMinimize={onMinimize}
       width={width}
       height={height}
       initialX={initialX}
@@ -495,7 +510,7 @@ export function MapWindow({
                           y={y0}
                           width={halfWidth}
                           height={cellHeight}
-                          fill={color == null ? 'transparent' : checkColorHex(color)}
+                          fill={color == null ? 'transparent' : checkColorHex(color, checkColors)}
                           style={{
                             mixBlendMode: color == null ? undefined : 'multiply',
                             opacity: color == null ? undefined : 0.7,

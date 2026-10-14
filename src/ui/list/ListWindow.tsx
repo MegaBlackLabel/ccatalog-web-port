@@ -26,9 +26,18 @@ import {
   TOOLBAR_SWATCH_STYLE,
 } from '../main/toolbar-groove';
 import type { CheckColor } from '../../app/catalog-state';
-import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkSwatchIcon } from '../check-colors';
+import { CHECK_COLOR_IDS, checkColorPalette, checkSwatchIcon } from '../check-colors';
+import { DEFAULT_LIST_DISPLAY_SETTINGS, type ListColumnKey } from '../../domain/app-settings';
 import { KANA_ROWS, OTHER_KANA_ROW, kanaRowOf } from '../../domain/kana';
 import type { Circle, Genre } from '../../domain/types';
+import { assetUrl } from '../asset-url';
+
+/** リスト中のカット (32868)。行の高さに収まる小さな画像。 */
+const LIST_CUT_STYLE: CSSProperties = {
+  display: 'block',
+  height: 28,
+  width: 'auto',
+};
 
 /** 表示モードボックス (1WINDOW/6LIST.HTM) の選択肢。 */
 type ListDisplayMode = 'dateBlock' | 'dateIndex' | 'lotteryMiss' | 'searchResults';
@@ -55,6 +64,20 @@ export type ListWindowProps = {
   onSetColor: (ids: number[], color: CheckColor) => void;
   onRemove: (ids: number[]) => void;
   onClose: () => void;
+  /** タイトルバーの最小化 (アイコン化)。動作設定 1714「個別窓のアイコン化を連動する」。 */
+  onMinimize?: () => void;
+  /** 「色の設定」の表示色 (動作設定)。未指定なら実物から実測した色。 */
+  checkColors?: readonly string[];
+  /** 「リスト表示」の設定 (動作設定 210)。一覧に出す列と並び。 */
+  visibleColumns?: readonly ListColumnKey[];
+  /**
+   * 動作設定 1022「選択サークルのブロックが変わった際にサークル一覧の表示も追従する」。
+   * null 以外なら、その日付 / ブロックの表示へ切り替える (アプリ側が選択サークルから決める)。
+   */
+  followDay?: number | null;
+  followBlockId?: number | null;
+  /** 表示 > リスト中のカット表示 (32868)。行の先頭にカット画像の列を足す。 */
+  showCuts?: boolean;
   /** ウィンドウの初期位置とサイズ (アプリ側のレイアウトが決める)。 */
   initialX?: number;
   initialY?: number;
@@ -134,12 +157,20 @@ export function ListWindow({
   onSetColor,
   onRemove,
   onClose,
+  onMinimize,
+  checkColors,
+  visibleColumns = DEFAULT_LIST_DISPLAY_SETTINGS.list,
+  followDay = null,
+  followBlockId = null,
+  showCuts = false,
   initialX = 120,
   initialY = 90,
   width = 920,
   height = 460,
   zIndex,
 }: ListWindowProps) {
+  // 色ボタン (色1〜9) の色。「色の設定」(動作設定) を反映する。
+  const palette = checkColorPalette(checkColors);
   const [mode, setMode] = useState<ListDisplayMode>(() =>
     results === null ? 'dateBlock' : 'searchResults',
   );
@@ -163,6 +194,18 @@ export function ListWindow({
     if (selectedId === null || selectedId === notifiedRef.current) return;
     setSelectedIds([selectedId]);
   }, [selectedId]);
+
+  // 動作設定 1022: 選んだサークルの日付 / ブロックに一覧の表示を合わせる。
+  useEffect(() => {
+    if (followDay === null) return;
+    setMode('dateBlock');
+    setDay(followDay);
+  }, [followDay]);
+
+  useEffect(() => {
+    if (followBlockId === null) return;
+    setBlockId(followBlockId);
+  }, [followBlockId]);
 
 
   // 日付・ブロック・インデックスの選択肢はデータから作る (ハードコードしない)。
@@ -220,29 +263,63 @@ export function ListWindow({
   const genreNames: Record<number, string> = {};
   for (const genre of genres) genreNames[genre.id] = genre.name;
 
-  const columns: readonly TableColumn<ListRow>[] = [
-    { key: 'circleName', header: 'サークル名', width: 200 },
-    { key: 'circleKana', header: '読み', width: 110 },
-    { key: 'penName', header: '執筆者', width: 140 },
-    { key: 'bookName', header: '発行誌', width: 150 },
-    {
+  /** 列 1 本の定義。「リスト表示」の設定 (動作設定 210) の並びで表示する列だけを並べる。 */
+  const columnDefs: Record<Exclude<ListColumnKey, 'color'>, TableColumn<ListRow>> = {
+    name: { key: 'circleName', header: 'サークル名', width: 200 },
+    kana: { key: 'circleKana', header: '読み', width: 110 },
+    pen: { key: 'penName', header: '執筆者', width: 140 },
+    book: { key: 'bookName', header: '発行誌', width: 150 },
+    description: {
+      key: 'description',
+      header: '補足',
+      width: 140,
+      render: (_value, row) => (row.description === '' ? '—' : row.description),
+    },
+    memo: { key: 'memo', header: 'メモ', width: 140, render: (_value, row) => (row.memo === '' ? '—' : row.memo) },
+    space: {
       key: 'spaceNo',
       header: '位置',
       width: 70,
       render: (_value, row) => `${row.spaceNo}${row.spaceNoSub === 1 ? 'b' : 'a'}`,
     },
-    {
+    day: {
       key: 'day',
       header: '日付',
       width: 80,
       render: (_value, row) => (row.day === 0 ? '抽選漏れ' : `${row.day}日目`),
     },
-    {
+    genre: {
       key: 'genreId',
       header: 'ジャンル',
       width: 130,
       render: (_value, row) => genreNames[row.genreId] ?? String(row.genreId),
     },
+  };
+
+  const columns: readonly TableColumn<ListRow>[] = [
+    // 表示 > リスト中のカット表示 (32868) を入れると、行の先頭にカット画像の列が出る。
+    ...(showCuts
+      ? [
+          {
+            key: 'circleId' as const,
+            header: 'カット',
+            width: 60,
+            render: (_value: string | number, row: ListRow) => (
+              <img
+                data-testid="list-cut"
+                src={assetUrl(`/cuts/${row.circleId}.png`)}
+                alt=""
+                draggable={false}
+                style={LIST_CUT_STYLE}
+              />
+            ),
+          },
+        ]
+      : []),
+    // チェック色はサークル一覧の行に持たせていないので、この一覧では出さない。
+    ...visibleColumns
+      .filter((key): key is Exclude<ListColumnKey, 'color'> => key !== 'color')
+      .map((key) => columnDefs[key]),
   ];
 
   const rows: ListRow[] = shown.map((circle) => ({
@@ -394,7 +471,7 @@ export function ListWindow({
               >
                 {/* サークルカット ウィンドウの色ボタンと同じアイコン (ui/check-colors.ts)。 */}
                 <img
-                  src={checkSwatchIcon(CHECK_COLOR_HEX[color])}
+                  src={checkSwatchIcon(palette[color - 1])}
                   alt=""
                   aria-hidden="true"
                   style={TOOLBAR_SWATCH_STYLE}
@@ -448,6 +525,7 @@ export function ListWindow({
       <Window
         title="サークル一覧"
         onClose={onClose}
+        onMinimize={onMinimize}
         width={width}
         height={height}
         initialX={initialX}

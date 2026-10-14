@@ -15,6 +15,31 @@ export const WINDOW_MENU_COMMANDS = {
   resetPositions: 60006,
 } as const;
 
+/**
+ * 「チェックリスト > 標準のチェック色」のコマンド ID の先頭。色1〜色9 が 33101..33109
+ * (元実装は実行時に色 1〜9 を並べるので、RT_MENU にはダミーの 1 項目しか無い)。
+ */
+export const CHECK_COLOR_COMMAND_BASE = 33100;
+
+/** 「表示 > ツールバー」の 5 本 (メインウィンドウのドッキング ツールバー)。 */
+export const TOOLBAR_BARS = [
+  { id: 'basic', menuCommand: 32839, label: '基本バー(B)' },
+  { id: 'jump', menuCommand: 32840, label: 'ページ移動バー(J)' },
+  { id: 'view', menuCommand: 32841, label: '表示バー(D)' },
+  { id: 'check', menuCommand: 32842, label: 'チェックバー(C)' },
+  { id: 'nav', menuCommand: 32847, label: 'ナビゲートバー(N)' },
+] as const;
+
+export type ToolbarBarId = (typeof TOOLBAR_BARS)[number]['id'];
+
+/** メニューのチェック印を付けるコマンド (オン / オフが分かるようにする)。 */
+export type MenuState = {
+  /** 表示中のツールバー。 */
+  visibleBars: readonly ToolbarBarId[];
+  /** オンになっているトグルのコマンド ID。 */
+  checked: readonly number[];
+};
+
 const WINDOW_MENU_ITEMS: CatalogMenuItem[] = [
   { type: 'item', label: 'サークル詳細(&D)', command: WINDOW_MENU_COMMANDS.detail },
   { type: 'item', label: 'サークル一覧(&L)', command: WINDOW_MENU_COMMANDS.list },
@@ -25,15 +50,58 @@ const WINDOW_MENU_ITEMS: CatalogMenuItem[] = [
   { type: 'item', label: 'ウィンドウ位置を初期化(&R)', command: WINDOW_MENU_COMMANDS.resetPositions },
 ];
 
+/** 標準のチェック色 (元実装は実行時に色 1〜9 を並べる)。 */
+function checkColorItems(
+  onCommand: (command: number) => void,
+  current: number,
+): MenuItemDef[] {
+  return [1, 2, 3, 4, 5, 6, 7, 8, 9].map((color) => ({
+    type: 'item',
+    label: `色${color}`,
+    checked: color === current,
+    onClick: () => onCommand(CHECK_COLOR_COMMAND_BASE + color),
+  }));
+}
+
+/** 表示するツールバー 5 本のオン / オフ。 */
+function toolbarBarItems(
+  onCommand: (command: number) => void,
+  state: MenuState,
+): MenuItemDef[] {
+  return TOOLBAR_BARS.map((bar) => ({
+    type: 'item',
+    label: bar.label,
+    checked: state.visibleBars.includes(bar.id),
+    onClick: () => onCommand(bar.menuCommand),
+  }));
+}
+
 /**
  * 生成済みメニュー定義 (RT_MENU 128 由来) を react98retro の MenuBar 形式へ変換する。
  * `command` は元実装の WM_COMMAND ID なので、アプリ側は onCommand 1 本で処理できる。
+ *
+ * `state` を渡すと、実行時に作られるサブメニュー (標準のチェック色 / ツールバー) を
+ * アプリの状態から作り、トグルの項目にチェック印を付ける。
  */
-export function toMenuBarMenus(onCommand: (command: number) => void): MenuBarMenu[] {
+export function toMenuBarMenus(
+  onCommand: (command: number) => void,
+  state?: MenuState,
+  checkColor?: number,
+): MenuBarMenu[] {
   const convert = (items: CatalogMenuItem[]): MenuItemDef[] =>
     items.map((item) => {
       if (item.type === 'separator') return { type: 'separator' };
       if (item.type === 'submenu') {
+        if (state !== undefined && item.label.startsWith('標準のチェック色')) {
+          return {
+            type: 'submenu',
+            label: item.label,
+            items: checkColorItems(onCommand, checkColor ?? 0),
+          };
+        }
+        if (state !== undefined && item.label.startsWith('ツールバー')) {
+          return { type: 'submenu', label: item.label, items: toolbarBarItems(onCommand, state) };
+        }
         return { type: 'submenu', label: item.label, disabled: item.disabled, items: convert(item.items) };
       }
       return {
@@ -41,7 +109,7 @@ export function toMenuBarMenus(onCommand: (command: number) => void): MenuBarMen
         label: item.label,
         shortcut: item.shortcut,
         disabled: item.disabled,
-        checked: item.checked,
+        checked: item.checked || (state?.checked.includes(item.command) ?? false),
         onClick: () => onCommand(item.command),
       };
     });

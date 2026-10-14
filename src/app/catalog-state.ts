@@ -1,14 +1,21 @@
 import { DEFAULT_SEARCH_CONDITION, searchCircles, type SearchCondition } from '../domain/search';
 import {
   DEFAULT_APP_SETTINGS,
+  DEFAULT_CHECK_COLOR_SETTINGS,
   DEFAULT_GOOGLE_SEARCH_SETTINGS,
+  DEFAULT_IMAGE_PATH_SETTINGS,
+  DEFAULT_LIST_DISPLAY_SETTINGS,
   DEFAULT_PAGE_SETUP,
   type AppSettings,
   type Bookmark,
+  type CheckColorSettings,
   type GoogleSearchSettings,
+  type ImagePathSettings,
+  type ListDisplaySettings,
   type PageSetup,
 } from '../domain/app-settings';
 import type { CatalogData, Circle } from '../domain/types';
+import type { PersistedState } from './persistence';
 
 /** チェック色。1〜9 が元実装の「色1〜色9」、0 は標準色。 */
 export type CheckColor = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -41,6 +48,12 @@ export type CatalogState = {
   memos: Record<number, string>;
   /** 動作オプション (ダイアログ 150)。 */
   settings: AppSettings;
+  /** 画像データパス (動作設定の「画像データパス」ページ)。 */
+  imagePath: ImagePathSettings;
+  /** リスト表示 (動作設定の「リスト表示」ページ)。 */
+  listDisplay: ListDisplaySettings;
+  /** 色の設定 (動作設定の「色の設定」ページ)。 */
+  checkColors: CheckColorSettings;
   /** Google 検索の条件設定 (ダイアログ 212)。 */
   googleSearch: GoogleSearchSettings;
   /** 用紙サイズ・余白 (ダイアログ 203)。 */
@@ -59,18 +72,29 @@ export type CatalogAction =
   | { type: 'circle/select'; id: number | null }
   | { type: 'checklist/toggle'; id: number; color: CheckColor }
   | { type: 'checklist/remove'; ids: number[] }
+  /** チェックリストを丸ごと入れ替える (新規作成 / 読み込み)。 */
+  | { type: 'checklist/replace'; entries: ChecklistEntry[] }
   /** 指定したサークルのチェック色を変える (未登録ならその色で追加する)。 */
   | { type: 'checklist/setColor'; ids: number[]; color: CheckColor }
   | { type: 'checklist/orderBy'; column: ChecklistSortColumn }
   | { type: 'memo/set'; id: number; memo: string }
+  /** すべてのメモを消す (チェックリスト > 全てのメモを消去する)。 */
+  | { type: 'memo/clear' }
+  /** チェックしていないサークルのメモを消す (残す ID を渡す)。 */
+  | { type: 'memo/clearUnchecked'; keepIds: number[] }
   | { type: 'settings/set'; patch: Partial<AppSettings> }
   | { type: 'settings/reset' }
+  | { type: 'imagePath/set'; patch: Partial<ImagePathSettings> }
+  | { type: 'listDisplay/set'; patch: Partial<ListDisplaySettings> }
+  | { type: 'checkColors/set'; patch: Partial<CheckColorSettings> }
   | { type: 'googleSearch/set'; patch: Partial<GoogleSearchSettings> }
   | { type: 'pageSetup/set'; patch: Partial<PageSetup> }
   | { type: 'bookmarks/add'; name: string; pageNo: number; group?: string }
   | { type: 'bookmarks/remove'; ids: number[] }
   | { type: 'bookmarks/rename'; id: number; name: string }
-  | { type: 'bookmarks/setGroup'; ids: number[]; group: string };
+  | { type: 'bookmarks/setGroup'; ids: number[]; group: string }
+  /** 保存しておいた状態 (localStorage) を起動時に取り込む。 */
+  | { type: 'state/restore'; patch: Partial<PersistedState> };
 
 export const initialCatalogState: CatalogState = {
   catalog: null,
@@ -83,6 +107,9 @@ export const initialCatalogState: CatalogState = {
   checklist: [],
   memos: {},
   settings: DEFAULT_APP_SETTINGS,
+  imagePath: DEFAULT_IMAGE_PATH_SETTINGS,
+  listDisplay: DEFAULT_LIST_DISPLAY_SETTINGS,
+  checkColors: DEFAULT_CHECK_COLOR_SETTINGS,
   googleSearch: DEFAULT_GOOGLE_SEARCH_SETTINGS,
   pageSetup: DEFAULT_PAGE_SETUP,
   bookmarks: [],
@@ -176,6 +203,9 @@ export function catalogReducer(state: CatalogState, action: CatalogAction): Cata
       return { ...state, checklist: state.checklist.filter((entry) => !remove.has(entry.circleId)) };
     }
 
+    case 'checklist/replace':
+      return { ...state, checklist: action.entries };
+
     // 登録済みは色を変え、未登録はその色で追加する (サークル詳細の色ボタンは
     // 「その色でチェックする」なので、まだチェックしていないサークルにも効く必要がある)。
     case 'checklist/setColor': {
@@ -216,11 +246,32 @@ export function catalogReducer(state: CatalogState, action: CatalogAction): Cata
     case 'memo/set':
       return { ...state, memos: { ...state.memos, [action.id]: action.memo } };
 
+    case 'memo/clear':
+      return { ...state, memos: {} };
+
+    case 'memo/clearUnchecked': {
+      const keep = new Set(action.keepIds);
+      const memos: Record<number, string> = {};
+      for (const [id, memo] of Object.entries(state.memos)) {
+        if (keep.has(Number(id))) memos[Number(id)] = memo;
+      }
+      return { ...state, memos };
+    }
+
     case 'settings/set':
       return { ...state, settings: { ...state.settings, ...action.patch } };
 
     case 'settings/reset':
       return { ...state, settings: DEFAULT_APP_SETTINGS };
+
+    case 'imagePath/set':
+      return { ...state, imagePath: { ...state.imagePath, ...action.patch } };
+
+    case 'listDisplay/set':
+      return { ...state, listDisplay: { ...state.listDisplay, ...action.patch } };
+
+    case 'checkColors/set':
+      return { ...state, checkColors: { ...state.checkColors, ...action.patch } };
 
     case 'googleSearch/set':
       return { ...state, googleSearch: { ...state.googleSearch, ...action.patch } };
@@ -264,6 +315,10 @@ export function catalogReducer(state: CatalogState, action: CatalogAction): Cata
         ),
       };
     }
+
+    // 起動時に localStorage から取り込む (元実装の INI / チェックリストファイル相当)。
+    case 'state/restore':
+      return { ...state, ...action.patch };
 
     default:
       return state;

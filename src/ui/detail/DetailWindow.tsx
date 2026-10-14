@@ -4,7 +4,7 @@ import type { CheckColor } from '../../app/catalog-state';
 import { CutSpaceBox, cutSpaceLabel } from '../main/cut-space';
 import { assetUrl } from '../asset-url';
 import type { Circle } from '../../domain/types';
-import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkSwatchIcon } from '../check-colors';
+import { CHECK_COLOR_IDS, checkColorPalette, checkSwatchIcon } from '../check-colors';
 // 実物のツールバー アイコン (PE の RT_BITMAP を SVG 化したもの) をそのまま使う。
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
 import {
@@ -51,6 +51,10 @@ export type DetailWindowProps = {
   onSetColor?: (color: CheckColor) => void;
   onGoogleSearch: () => void;
   onClose: () => void;
+  /** タイトルバーの最小化 (アイコン化)。動作設定 1714「個別窓のアイコン化を連動する」。 */
+  onMinimize?: () => void;
+  /** 「色の設定」の表示色 (動作設定)。未指定なら実物から実測した色。 */
+  checkColors?: readonly string[];
   /** チェック色の表示名 (元実装の「チェック色」欄。省略時は標準色)。 */
   checkColorLabel?: string;
   /** ウィンドウの初期位置とサイズ (アプリ側のレイアウトが決める)。 */
@@ -415,6 +419,8 @@ export function DetailWindow({
   onMemoChange,
   onGoogleSearch,
   onClose,
+  onMinimize,
+  checkColors,
   initialX = 560,
   initialY = 60,
   width = 512,
@@ -423,6 +429,8 @@ export function DetailWindow({
   maxWidth = 560,
   zIndex,
 }: DetailWindowProps) {
+  // 色ボタン (色1〜9) の色。「色の設定」(動作設定) を反映する。
+  const palette = checkColorPalette(checkColors);
   // 元実装のサークル詳細情報の並び (DB の列と印刷の区切り名に合わせてある)。
   const infoRows: readonly InfoRowData[] = circle
     ? [
@@ -467,6 +475,7 @@ export function DetailWindow({
       data-testid="detail-window"
       title={`サークル詳細${circle ? ' - ' + circle.circleName : ''}`}
       onClose={onClose}
+      onMinimize={onMinimize}
       width={width}
       height={height}
       initialX={initialX}
@@ -519,7 +528,7 @@ export function DetailWindow({
                 >
                   {/* サークルカット ウィンドウの色ボタンと同じアイコン (ui/check-colors.ts)。 */}
                   <img
-                    src={checkSwatchIcon(CHECK_COLOR_HEX[color])}
+                    src={checkSwatchIcon(palette[color - 1])}
                     alt=""
                     aria-hidden="true"
                     style={TOOLBAR_SWATCH_STYLE}
