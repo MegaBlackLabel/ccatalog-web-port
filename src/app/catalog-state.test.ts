@@ -314,6 +314,89 @@ describe('catalogReducer — ブックマーク', () => {
   });
 });
 
+describe('catalogReducer — 読み込み / 保存で使うアクション', () => {
+  it('checklist/replace はチェックリストを丸ごと入れ替える', () => {
+    const next = catalogReducer(loaded, {
+      type: 'checklist/replace',
+      entries: [
+        { circleId: 1, color: 2 },
+        { circleId: 2, color: 5 },
+      ],
+    });
+
+    expect(next.checklist).toEqual([
+      { circleId: 1, color: 2 },
+      { circleId: 2, color: 5 },
+    ]);
+  });
+
+  it('memo/clear はすべてのメモを消す', () => {
+    const withMemos = catalogReducer(
+      catalogReducer(loaded, { type: 'memo/set', id: 1, memo: 'A' }),
+      { type: 'memo/set', id: 2, memo: 'B' },
+    );
+
+    expect(catalogReducer(withMemos, { type: 'memo/clear' }).memos).toEqual({});
+  });
+
+  it('memo/clearUnchecked は keepIds のメモだけ残す', () => {
+    const withMemos = catalogReducer(
+      catalogReducer(
+        catalogReducer(loaded, { type: 'memo/set', id: 1, memo: 'A' }),
+        { type: 'memo/set', id: 2, memo: 'B' },
+      ),
+      { type: 'memo/set', id: 3, memo: 'C' },
+    );
+
+    const next = catalogReducer(withMemos, { type: 'memo/clearUnchecked', keepIds: [1, 3] });
+
+    // 残す ID 以外 (2) は消える。キーは文字列になるので数値で引き直す。
+    expect(next.memos).toEqual({ 1: 'A', 3: 'C' });
+    expect(Object.keys(next.memos).map(Number).sort()).toEqual([1, 3]);
+  });
+
+  it('imagePath/set / listDisplay/set / checkColors/set は渡した項目だけ差し替える', () => {
+    const imagePath = catalogReducer(loaded, {
+      type: 'imagePath/set',
+      patch: { basePath: 'D:/imgs', useDefaultBrowser: false },
+    });
+    expect(imagePath.imagePath.basePath).toBe('D:/imgs');
+    expect(imagePath.imagePath.useDefaultBrowser).toBe(false);
+    expect(imagePath.imagePath).not.toBe(loaded.imagePath);
+
+    const listDisplay = catalogReducer(loaded, {
+      type: 'listDisplay/set',
+      patch: { list: ['name', 'day'] },
+    });
+    expect(listDisplay.listDisplay.list).toEqual(['name', 'day']);
+    // 渡していない項目は元のまま。
+    expect(listDisplay.listDisplay.checklist).toEqual(loaded.listDisplay.checklist);
+
+    const checkColors = catalogReducer(loaded, {
+      type: 'checkColors/set',
+      patch: { display: ['#000000'] },
+    });
+    expect(checkColors.checkColors.display).toEqual(['#000000']);
+    expect(checkColors.checkColors.print).toEqual(loaded.checkColors.print);
+  });
+
+  it('state/restore は保存しておいた項目を戻す', () => {
+    const next = catalogReducer(loaded, {
+      type: 'state/restore',
+      patch: {
+        checklist: [{ circleId: 7, color: 3 }],
+        memos: { 7: '復元したメモ' },
+      },
+    });
+
+    expect(next.checklist).toEqual([{ circleId: 7, color: 3 }]);
+    expect(next.memos).toEqual({ 7: '復元したメモ' });
+    // patch に無いもの (カタログ・検索条件) は触らない。
+    expect(next.catalog).toBe(loaded.catalog);
+    expect(next.condition).toBe(loaded.condition);
+  });
+});
+
 describe('catalogReducer — 未知のアクション', () => {
   it('状態をそのまま返す', () => {
     const state: CatalogState = loaded;

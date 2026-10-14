@@ -38,6 +38,8 @@ export type CutSpaceBoxProps = {
   space: string;
   /** チェック色。渡すとその色で塗る (文字は色の明暗で白黒を選ぶ)。 */
   color?: CheckColor;
+  /** 「色の設定」の 9 色 (動作設定)。未指定なら実物から実測した色。 */
+  colors?: readonly string[];
   className?: string;
   style?: CSSProperties;
   'data-testid'?: string;
@@ -47,7 +49,7 @@ export type CutSpaceBoxProps = {
  * カットの左上にあるスペース番号のボックス。チェック済みのカットはチェック色で塗る
  * (元実装のカットの見た目。色を指定していないサークルは標準色 = 緑)。
  */
-export function CutSpaceBox({ space, color, className, style, ...rest }: CutSpaceBoxProps) {
+export function CutSpaceBox({ space, color, colors, className, style, ...rest }: CutSpaceBoxProps) {
   return (
     <span
       className={className}
@@ -60,7 +62,7 @@ export function CutSpaceBox({ space, color, className, style, ...rest }: CutSpac
         fontSize: CUT_SPACE_FONT_SIZE,
         ...(color === undefined
           ? null
-          : { background: checkColorHex(color), color: checkColorText(color) }),
+          : { background: checkColorHex(color, colors), color: checkColorText(color, colors) }),
         ...style,
       }}
       {...rest}

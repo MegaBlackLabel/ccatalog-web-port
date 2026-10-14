@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CheckColor } from '../../app/catalog-state';
 import type { Circle, ComiketInfo } from '../../domain/types';
-import { CircleCutView } from './CircleCutView';
+import { CircleCutView, DEFAULT_CUT_VIEW_OPERATION, type CutViewOperation } from './CircleCutView';
 
 /**
  * 実物のカットビューは 6x6 の固定格子 (cutIndex 1〜36)。ここでは縦横の余白と
@@ -224,5 +224,70 @@ describe('CircleCutView — 6 列の格子 (実物のカット枠)', () => {
     expect(onHoverCircle).toHaveBeenLastCalledWith(expect.objectContaining({ id: 3 }));
     await user.unhover(cell);
     expect(onHoverCircle).toHaveBeenLastCalledWith(null);
+  });
+});
+
+describe('CircleCutView — 掴みスクロール (動作設定 1023 Adobe / 1025 IE / 1027 ドラッグのみ)', () => {
+  /** jsdom にはレイアウトが無いので、カットビューの計測だけ差し替えて描く。 */
+  function renderWithScrollMode(scrollMode: CutViewOperation['scrollMode']) {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 400,
+      bottom: 400,
+      width: 400,
+      height: 400,
+      toJSON: () => ({}),
+    });
+    render(
+      <CircleCutView
+        circles={[makeCircle(1)]}
+        info={null}
+        selectedId={null}
+        checkedIds={new Set<number>()}
+        onSelect={vi.fn()}
+        onOpenDetail={vi.fn()}
+        operation={{ ...DEFAULT_CUT_VIEW_OPERATION, scrollMode }}
+      />,
+    );
+    return screen.getByTestId('cut-view');
+  }
+
+  it('ドラッグのみ (1027) は左ドラッグで掴んでスクロールする', () => {
+    const view = renderWithScrollMode('drag');
+
+    fireEvent.mouseDown(view, { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(view, { clientX: 60, clientY: 40 });
+
+    // 掴んだ位置から左 40px / 上 60px 引いた分だけ中身が動く。
+    expect(view.scrollLeft).toBe(40);
+    expect(view.scrollTop).toBe(60);
+  });
+
+  it('Adobe 方式 (1023) はスペースキーを押しているときだけ掴める', () => {
+    const view = renderWithScrollMode('adobe');
+
+    fireEvent.mouseDown(view, { button: 0, clientX: 100, clientY: 0 });
+    fireEvent.mouseMove(view, { clientX: 50, clientY: 0 });
+    expect(view.scrollLeft).toBe(0);
+
+    fireEvent.keyDown(window, { code: 'Space' });
+    fireEvent.mouseDown(view, { button: 0, clientX: 100, clientY: 0 });
+    fireEvent.mouseMove(view, { clientX: 50, clientY: 0 });
+    expect(view.scrollLeft).toBe(50);
+  });
+
+  it('IE 方式 (1025) は中ボタンのドラッグで掴む', () => {
+    const view = renderWithScrollMode('ie');
+
+    fireEvent.mouseDown(view, { button: 0, clientX: 100, clientY: 0 });
+    fireEvent.mouseMove(view, { clientX: 40, clientY: 0 });
+    expect(view.scrollLeft).toBe(0);
+
+    fireEvent.mouseDown(view, { button: 1, clientX: 100, clientY: 0 });
+    fireEvent.mouseMove(view, { clientX: 40, clientY: 0 });
+    expect(view.scrollLeft).toBe(60);
   });
 });

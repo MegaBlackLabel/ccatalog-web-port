@@ -16,13 +16,15 @@ import {
 import type { ToolbarItemDef } from '@megablacklabel/react98retro';
 import { TOOLBAR_ICONS } from './toolbar-icons';
 import { TOOLBAR_CONTENT_HEIGHT, TOOLBAR_PADDING_X } from './toolbar-groove';
-import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkSwatchIcon } from '../check-colors';
+import { checkColorPalette, checkSwatchIcon } from '../check-colors';
 import type { CheckColor } from '../../app/catalog-state';
 import { SOURCE_CHARS, TARGET_CHARS, normalize } from '../../domain/normalize';
 import type { Circle, ComiketInfo } from '../../domain/types';
 import { MENU_COMMANDS } from '../menu/menu-defs';
-import { toMenuBarMenus } from '../menu/to-menu-bar';
-import { CircleCutView } from './CircleCutView';
+import { toMenuBarMenus, TOOLBAR_BARS, type ToolbarBarId } from '../menu/to-menu-bar';
+import { TOOLBAR_COMMANDS } from './toolbar-commands';
+import type { FitBox } from './fit-zoom';
+import { CircleCutView, type CutViewOperation } from './CircleCutView';
 
 /** ツールバーのドロップダウンの選択肢 1 個。 */
 export type MainWindowToolbarOption = {
@@ -79,8 +81,30 @@ export type MainWindowProps = {
    * コントロール (実測 ID 125) なので WM_COMMAND を持たない。
    */
   onZoomChange?: (percent: number) => void;
+  /**
+   * セル 1 枚の幅 (拡大率を掛けた実寸)。null なら幅に合わせる (6 列の 1fr)。
+   * アプリ側が拡大率から計算して渡す (カットビュー側は表示だけを受け持つ)。
+   */
+  cellWidth?: number | null;
+  /** カットビューの表示領域 (アプリ側の「幅 / 高さ / 全体」合わせの計算元)。 */
+  onViewBoxChange?: (box: FitBox) => void;
+  /** 動作設定 (ダイアログ 150) のうち、カットビューの操作に関するもの。 */
+  operation?: CutViewOperation;
+  /** リターンキー / テンキーでチェックしたあとに移すサークル (アプリ側が決める)。 */
+  onMoveNext?: (circle: Circle) => void;
   /** ページ移動ツールバーの選択肢。未指定なら circles から作れる分だけ入れる。 */
   jumpOptions?: MainWindowJumpOptions;
+  /** 表示するドッキング ツールバー (表示 > ツールバー 32839-32847)。省略時は 5 本とも出す。 */
+  visibleBars?: readonly ToolbarBarId[];
+  /** オンのトグル (アンチエイリアス / 高解像度表示 / リスト中のカット表示) のコマンド。 */
+  checkedCommands?: readonly number[];
+  /** 標準のチェック色 (チェックリスト > 標準のチェック色)。メニューのチェック印に使う。 */
+  checkColor?: number;
+  /** アンチエイリアス (表示 32792)。抜き差しできるようにして、省略時はこの画面が持つ。 */
+  antiAlias?: boolean;
+  onAntiAliasChange?: (antiAlias: boolean) => void;
+  /** 「色の設定」の表示色 (動作設定)。未指定なら実物から実測した色。 */
+  checkColors?: readonly string[];
   /** ウィンドウの初期位置とサイズ (アプリ側のレイアウトが決める)。 */
   initialX?: number;
   initialY?: number;
@@ -94,7 +118,7 @@ export type MainWindowProps = {
  */
 type ToolbarGroup = {
   /** key と data-testid に使う識別子。 */
-  id: string;
+  id: ToolbarBarId;
   /** 実物のツールバー名 (アクセシブル名に使う)。例 "ページ移動ツールバー"。 */
   label: string;
   /** Toolbar に並べる項目。 */
@@ -106,27 +130,6 @@ type ToolbarGroup = {
    */
   extra?: ReactNode;
 };
-
-/**
- * ツールバーが送る WM_COMMAND のうち MENU_COMMANDS (menu-defs.ts) に無いもの。
- * jumpOptions を渡されなかったときのジャンプの ID 帯は、元実装のページ移動メニュー
- * 実測 (34000 = 日付 / 34100 = ホール / 34200 = ブロック / 34400 = ジャンル) に合わせ、
- * メニューに対応の無いインデックスだけ 34300 帯を Web 版の割り当てにする
- * (ホールは circles から作れないので既定では選択肢なし = アプリが選択肢を渡す)。
- */
-const TOOLBAR_COMMANDS = {
-  dayJumpBase: 34000,
-  indexJumpBase: 34300,
-  /** 「チェックリストに追加／色変更」= 33000 + 色番号 (1〜9)。 */
-  checkColorBase: 33000,
-  checkRemove: 33020,
-  /** 色編集。元実装はツールバー内のボタン (実測 ID 33041) で、Web 版はメニューと同じ 61227 で開く。 */
-  colorEdit: 61227,
-  antiAlias: 32792,
-} as const;
-
-/** ツールバーの色ボタン (色1〜色9) の色。実物のツールバーから実測 (ui/check-colors.ts)。 */
-const CHECK_COLORS: readonly string[] = CHECK_COLOR_IDS.map((color) => CHECK_COLOR_HEX[color]);
 
 /**
  * 正規化済みの読み先頭 (半角カナ) を表示用のひらがなへ戻す。
@@ -377,14 +380,27 @@ export function MainWindow({
   lastPage,
   zoom = 100,
   onZoomChange,
+  cellWidth,
+  onViewBoxChange,
+  operation,
+  onMoveNext,
   jumpOptions,
+  visibleBars,
+  checkedCommands,
+  checkColor,
+  antiAlias: antiAliasProp,
+  onAntiAliasChange,
+  checkColors,
   initialX = 40,
   initialY = 30,
   width = 900,
   height = 680,
 }: MainWindowProps) {
   const [pageDraft, setPageDraft] = useState(String(pageNo));
-  const [antiAlias, setAntiAlias] = useState(true);
+  // アンチエイリアス (32792) は表示メニューとツールバーの両方から切り替わる。
+  // アプリが状態を持つときはそちらに任せ、単体で使うときはこの画面が持つ。
+  const [antiAliasLocal, setAntiAliasLocal] = useState(true);
+  const antiAlias = antiAliasProp ?? antiAliasLocal;
   // マウスが乗っているカット。元実装はステータスバーにそのサークル情報を簡易表示する。
   const [hoveredCircle, setHoveredCircle] = useState<Circle | null>(null);
   const hoverInfo =
@@ -436,6 +452,9 @@ export function MainWindow({
 
   // 拡大率はアプリ側と同じ % (実物のツールバー内 Edit の表示と同じ単位)。
   const zoomPercent = Math.round(zoom);
+
+  // チェックツールバーの色ボタン (色1〜色9) の色。「色の設定」(動作設定) を反映する。
+  const palette = checkColorPalette(checkColors);
 
   // 元実装のツールバー (ヘルプ 1WINDOW/8TOOLBAR.HTM) は 5 本のドッキング ツールバー。
   // アイコンは**実物の PE リソース (RT_BITMAP 130 / 16x15) を SVG 化した TOOLBAR_ICONS**
@@ -515,7 +534,8 @@ export function MainWindow({
                 tooltip: 'アンチエイリアス',
                 pressed: antiAlias,
                 onClick: () => {
-                  setAntiAlias((value) => !value);
+                  // アプリが状態を持つときは、コマンド (32792) 側だけで切り替える。
+                  if (onAntiAliasChange === undefined) setAntiAliasLocal((value) => !value);
                   onCommand(TOOLBAR_COMMANDS.antiAlias);
                 },
               },
@@ -530,7 +550,7 @@ export function MainWindow({
       // チェックリスト関連: 色1〜色9 + チェックリストから外す
       items: [
         { type: 'separator' },
-        ...CHECK_COLORS.map((color, index) =>
+        ...palette.map((color, index) =>
           toolbarButton(
             `check-color-${index + 1}`,
             `色${index + 1}`,
@@ -564,6 +584,10 @@ export function MainWindow({
     },
   ];
 
+  // 表示 > ツールバー (32839〜32847) で隠したバーは並べない。
+  const shownBars = visibleBars ?? TOOLBAR_BARS.map((bar) => bar.id);
+  const shownGroups = toolbarGroups.filter((group) => shownBars.includes(group.id));
+
   // 実物のドッキング ツールバーと同じく、段に入りきらないグループは次の段へ回す。
   // 幅はレイアウト後にしか分からないので、ライブラリの useToolbarRows が計測して詰める
   // (計測できないときは 1 段のまま CSS の折り返しに任せる)。
@@ -572,7 +596,7 @@ export function MainWindow({
     itemRefs: groupRefs,
     rows: toolbarRows,
   } = useToolbarRows({
-    count: toolbarGroups.length,
+    count: shownGroups.length,
     gap: TOOLBAR_ROW_GAP,
     paddingX: TOOLBAR_PADDING_X,
   });
@@ -582,7 +606,11 @@ export function MainWindow({
 
   // RT_MENU 128 の定義 + 実行時に作られる「ウィンドウ」メニュー
   // (src/ui/menu/to-menu-bar.ts が単一の変換元)。
-  const menus = toMenuBarMenus(onCommand);
+  const menus = toMenuBarMenus(
+    onCommand,
+    { visibleBars: shownBars, checked: checkedCommands ?? [] },
+    checkColor,
+  );
 
   return (
     <div data-testid="main-window">
@@ -657,7 +685,7 @@ export function MainWindow({
           rows={toolbarRows.map((row) => (
             <ToolbarRow key={row[0]} data-testid="toolbar-row" style={TOOLBAR_ROW_LOCAL}>
               {row.map((groupIndex) => {
-                const group = toolbarGroups[groupIndex];
+                const group = shownGroups[groupIndex];
                 return (
                   <div
                     key={group.id}
@@ -685,6 +713,12 @@ export function MainWindow({
           onOpenDetail={onOpenDetail}
           imageUrl={imageUrl}
           onHoverCircle={setHoveredCircle}
+          cellWidth={cellWidth}
+          onViewBoxChange={onViewBoxChange}
+          operation={operation}
+          onMoveNext={onMoveNext}
+          antiAlias={antiAlias}
+          checkColors={checkColors}
         />
       </Window>
     </div>

@@ -12,7 +12,8 @@ import {
 } from '@megablacklabel/react98retro';
 import type { TabItem, TableColumn } from '@megablacklabel/react98retro';
 import type { CheckColor, ChecklistEntry, ChecklistSortColumn } from '../../app/catalog-state';
-import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkColorHex, checkSwatchIcon } from '../check-colors';
+import { checkColorHex, checkColorPalette, checkSwatchIcon } from '../check-colors';
+import { DEFAULT_LIST_DISPLAY_SETTINGS, type ListColumnKey } from '../../domain/app-settings';
 // 実物のツールバー アイコン (PE の RT_BITMAP を SVG 化したもの) をそのまま使う。
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
 import {
@@ -57,6 +58,14 @@ export type ChecklistWindowProps = {
   onOrderBy: (column: ChecklistSortColumn) => void;
   onOpenDetail: (id: number) => void;
   onClose: () => void;
+  /** ツールバーの RSS ボタン (元実装はサークルの RSS 情報をネットから取得する)。 */
+  onFetchRss?: () => void;
+  /** タイトルバーの最小化 (アイコン化)。動作設定 1714「個別窓のアイコン化を連動する」。 */
+  onMinimize?: () => void;
+  /** 「色の設定」の表示色 (動作設定)。未指定なら実物から実測した色。 */
+  checkColors?: readonly string[];
+  /** 「リスト表示」の設定 (動作設定 210)。表に出す列と並び。 */
+  visibleColumns?: readonly ListColumnKey[];
   /** ツールバーが折り返さない最小幅 (既定 782)。 */
   minWidth?: number;
   initialX?: number;
@@ -89,8 +98,6 @@ export type ChecklistListRow = {
 
 /** チェック色の見本色 (0 は標準色 = 緑)。定義は 5 ウィンドウ共通 (ui/check-colors.ts)。 */
 
-const CHECK_COLORS = CHECK_COLOR_IDS;
-
 const SWATCH_STYLE: CSSProperties = {
   display: 'inline-block',
   width: 12,
@@ -105,35 +112,49 @@ const SWATCH_STYLE: CSSProperties = {
 const renderText = (value: ChecklistListRow[keyof ChecklistListRow]): string =>
   value === '' || value == null ? '—' : String(value);
 
+/** 表の列 1 本の定義 (色以外は「リスト表示」の設定で表示 / 並びが変わる)。 */
+const CHECKLIST_COLUMN_DEFS: Record<Exclude<ListColumnKey, 'color'>, TableColumn<ChecklistListRow>> = {
+  name: { key: 'name', header: 'サークル名', width: 190 },
+  kana: { key: 'kana', header: '読み', width: 110 },
+  pen: { key: 'pen', header: '執筆者', width: 120 },
+  book: { key: 'book', header: '発行誌', width: 160 },
+  description: { key: 'description', header: '補足', width: 120, render: (value) => renderText(value) },
+  memo: { key: 'memo', header: 'メモ', width: 120, render: (value) => renderText(value) },
+  space: { key: 'space', header: '位置', width: 60 },
+  day: { key: 'day', header: '日付', width: 70 },
+  genre: { key: 'genre', header: 'ジャンル', width: 110 },
+};
+
 /**
  * 表の列。並びと幅の比率は実物のチェックリスト (1WINDOW/3CHECK.HTM) の
  * 印刷セパレータ (No. / サークル / 読み / 執筆者 / 発行誌 / 補足 / メモ / 位置 / 色)
  * に合わせ、元アプリのデータにある日付 / ジャンルを末尾に足している。
  * 合計がウィンドウ幅を超える分は横スクロールになる。
+ *
+ * No. と 色 は固定 (色は常に左端。5LIST.HTM) で、そのあとに「リスト表示」の設定の列が続く。
  */
-const COLUMNS: readonly TableColumn<ChecklistListRow>[] = [
-  { key: 'no', header: 'No.', width: 34 },
-  {
-    key: 'color',
-    header: '色',
-    width: 34,
-    render: (_value, row) => (
-      <span
-        data-color={row.color}
-        style={{ ...SWATCH_STYLE, background: checkColorHex(row.color) }}
-      />
-    ),
-  },
-  { key: 'name', header: 'サークル名', width: 190 },
-  { key: 'kana', header: '読み', width: 110 },
-  { key: 'pen', header: '執筆者', width: 120 },
-  { key: 'book', header: '発行誌', width: 160 },
-  { key: 'description', header: '補足', width: 120, render: (value) => renderText(value) },
-  { key: 'memo', header: 'メモ', width: 120, render: (value) => renderText(value) },
-  { key: 'space', header: '位置', width: 60 },
-  { key: 'day', header: '日付', width: 70 },
-  { key: 'genre', header: 'ジャンル', width: 110 },
-];
+function checklistColumns(
+  checkColors: readonly string[] | undefined,
+  visible: readonly ListColumnKey[],
+): TableColumn<ChecklistListRow>[] {
+  return [
+    { key: 'no', header: 'No.', width: 34 },
+    {
+      key: 'color',
+      header: '色',
+      width: 34,
+      render: (_value, row) => (
+        <span
+          data-color={row.color}
+          style={{ ...SWATCH_STYLE, background: checkColorHex(row.color, checkColors) }}
+        />
+      ),
+    },
+    ...visible
+      .filter((key): key is Exclude<ListColumnKey, 'color'> => key !== 'color')
+      .map((key) => CHECKLIST_COLUMN_DEFS[key]),
+  ];
+}
 
 /**
  * ツールバー 1 段分の、このウィンドウ固有の見た目。帯 (外周の溝) と段の並びは
@@ -191,6 +212,10 @@ export function ChecklistWindow({
   onOrderBy,
   onOpenDetail,
   onClose,
+  onFetchRss,
+  onMinimize,
+  checkColors,
+  visibleColumns = DEFAULT_LIST_DISPLAY_SETTINGS.checklist,
   minWidth = MIN_WINDOW_WIDTH,
   initialX = 160,
   initialY = 120,
@@ -198,6 +223,8 @@ export function ChecklistWindow({
   height = 430,
   zIndex,
 }: ChecklistWindowProps) {
+  // 色ボタン (色1〜9) と行の色見本の色。「色の設定」(動作設定) を反映する。
+  const palette = checkColorPalette(checkColors);
   const listRows: ChecklistListRow[] = rows.map(({ entry, circle, genreName }, index) => ({
     id: String(circle.id),
     circleId: circle.id,
@@ -222,7 +249,7 @@ export function ChecklistWindow({
       <div style={EMPTY_STYLE}>この日のチェックリストは空です</div>
     ) : (
       <TableView<ChecklistListRow>
-        columns={COLUMNS}
+        columns={checklistColumns(checkColors, visibleColumns)}
         rows={listRows}
         selectedIds={selectedIds.map(String)}
         onSelectionChange={(ids) => onSelectionChange(ids.map(Number))}
@@ -244,6 +271,7 @@ export function ChecklistWindow({
       data-testid="checklist-window"
       title="チェックリスト"
       onClose={onClose}
+      onMinimize={onMinimize}
       width={width}
       height={height}
       initialX={initialX}
@@ -291,18 +319,20 @@ export function ChecklistWindow({
               <img src={TOOLBAR_ICONS.printOrder} alt="" aria-hidden="true" style={TOOLBAR_ICON_STYLE} />
             </Button>
             <Groove orientation="vertical" style={TOOLBAR_SEPARATOR_STYLE} />
-            {/* 実物の RSS ボタン。Web 版に取得機能は無いので、押しても何もしない。 */}
+            {/* 実物の RSS ボタン。Web 版は取得処理をダミーで再現する。 */}
             <Button
               type="button"
               aria-label="RSS"
               title="サークルのRSS情報をネットから取得"
               style={TOOLBAR_ICON_BUTTON_STYLE}
+              onClick={onFetchRss}
             >
               <img src={TOOLBAR_ICONS.rss} alt="" aria-hidden="true" style={TOOLBAR_ICON_STYLE} />
             </Button>
             <Groove orientation="vertical" style={TOOLBAR_SEPARATOR_STYLE} />
             <div style={TOOLBAR_PALETTE_STYLE}>
-              {CHECK_COLORS.map((color) => {
+              {palette.map((hex, index) => {
+                const color = (index + 1) as CheckColor;
                 const name = colorNames[color - 1] || `色${color}`;
                 return (
                   <Button
@@ -317,7 +347,7 @@ export function ChecklistWindow({
                   >
                     {/* サークルカット ウィンドウの色ボタンと同じアイコン (ui/check-colors.ts)。 */}
                     <img
-                      src={checkSwatchIcon(CHECK_COLOR_HEX[color])}
+                      src={checkSwatchIcon(hex)}
                       alt=""
                       aria-hidden="true"
                       style={TOOLBAR_SWATCH_STYLE}

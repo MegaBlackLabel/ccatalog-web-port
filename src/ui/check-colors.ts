@@ -23,21 +23,24 @@ export const CHECK_COLOR_HEX: Record<Exclude<CheckColor, 0>, string> = {
   9: '#ff0000', // 赤 (255,0,0)
 };
 
+/** 標準色 (0) の見本色。実物の会場マップでチェック済みの机が塗られている緑。 */
+export const STANDARD_CHECK_COLOR_HEX = '#00c060';
+
 /**
- * チェック色の見本色。0 は標準色。色 1〜9 は実物のツールバーから実測した 9 色、
- * 標準色の緑 `#00c060` は実物の会場マップ (解析/chm_out/IMAGES/WINDOW4.PNG) で
- * チェック済みの机が塗られている色。
+ * チェック色の見本色。0 は標準色。色 1〜9 は「色の設定」(動作設定) の 9 色があれば
+ * それを使い、無ければ実物のツールバーから実測した色を使う。
  */
-export function checkColorHex(color: CheckColor): string {
-  return color === 0 ? '#00c060' : CHECK_COLOR_HEX[color];
+export function checkColorHex(color: CheckColor, colors?: readonly string[]): string {
+  if (color === 0) return STANDARD_CHECK_COLOR_HEX;
+  return colors?.[color - 1] ?? CHECK_COLOR_HEX[color];
 }
 
 /**
  * 塗りの上に載せる文字色。明るい色 (黄・水色・黄緑・白) の上では黒、
  * 暗い色の上では白にして読めるようにする (実物も色ごとに文字色を変えている)。
  */
-export function checkColorText(color: CheckColor): string {
-  const hex = checkColorHex(color).slice(1);
+export function checkColorText(color: CheckColor, colors?: readonly string[]): string {
+  const hex = checkColorHex(color, colors).slice(1);
   const [r, g, b] = [0, 2, 4].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
   // 相対輝度 (sRGB の係数) で明暗を決める。
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.6 ? '#000000' : '#ffffff';
@@ -45,6 +48,11 @@ export function checkColorText(color: CheckColor): string {
 
 /** 色 1〜9 の並び (元実装のツールバーの順)。 */
 export const CHECK_COLOR_IDS: readonly Exclude<CheckColor, 0>[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+/** 色 1〜9 の見本色の並び (「色の設定」の 9 色を反映)。色ボタンのアイコンに使う。 */
+export function checkColorPalette(colors?: readonly string[]): string[] {
+  return CHECK_COLOR_IDS.map((color) => checkColorHex(color, colors));
+}
 
 /**
  * 色ボタンの色矩形のアイコン (サークルカット ウィンドウの色ボタンと同じ見た目)。

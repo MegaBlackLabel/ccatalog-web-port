@@ -6,3 +6,6 @@ tmp/
 *.tsbuildinfo
 *.local
 .DS_Store
+
+# Python (tools/ の補助スクリプト)
+__pycache__/

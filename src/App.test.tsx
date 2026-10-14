@@ -1,12 +1,13 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import dummy from './data/fixtures/dummy-catalog.json';
 import { DEFAULT_SEARCH_CONDITION, searchCircles } from './domain/search';
 import { normalize } from './domain/normalize';
 import { SEARCH_FIELDS } from './domain/search-fields';
 import type { CatalogData } from './domain/types';
+import { CHECK_COLOR_HEX } from './ui/check-colors';
 
 /** 同梱のダミーカタログの件数 (生成: tools/gen-dummy-data.py)。 */
 const SAMPLE_COUNT = dummy.circles.length;
@@ -31,6 +32,37 @@ async function chooseMenu(user: UserEvent, topLabel: string, itemName: RegExp) {
 async function openSearch(user: UserEvent) {
   await chooseMenu(user, '検索(S)', /^検索\(S\)\.\.\./);
   return screen.findByTestId('search-window');
+}
+
+/**
+ * サブメニュー (標準のチェック色 / ツールバー) を開いて項目を選ぶ。
+ * ライブラリのサブメニューはホバーで開く (role="menu" が入れ子で出る)。
+ */
+async function chooseSubmenu(user: UserEvent, topLabel: string, subLabel: RegExp, itemName: RegExp) {
+  const menus = screen.getAllByRole('menubar');
+  await user.click(within(menus[menus.length - 1]).getByRole('menuitem', { name: topLabel }));
+  const opened = screen.getAllByRole('menu');
+  await user.hover(within(opened[opened.length - 1]).getByRole('menuitem', { name: subLabel }));
+  // サブメニューはホバーして 150ms 後に開く (ライブラリ側の遅延)。
+  await waitFor(() =>
+    expect(screen.getAllByRole('menuitem', { name: itemName }).length).toBeGreaterThan(0),
+  );
+  await user.click(screen.getAllByRole('menuitem', { name: itemName })[0]);
+}
+
+/** 各テストのスパイ (window.open / clipboard / 計測) と保存内容を戻す。 */
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
+
+/** 動作設定ダイアログ (ダイアログ 150) で 1 項目だけ切り替えて閉じる。 */
+async function toggleSetting(user: UserEvent, label: string) {
+  await chooseMenu(user, 'ファイル(F)', /^動作設定\(C\)\.\.\./);
+  const dialog = await screen.findByTestId('preferences-dialog');
+  await user.click(within(dialog).getByLabelText(label));
+  await user.click(within(dialog).getByTestId('preferences-close'));
 }
 
 describe('App — 元アプリの画面が揃っている', () => {
@@ -452,17 +484,35 @@ describe('App — 残りのダイアログをメニューから開ける', () =>
     expect(await screen.findByTestId('preferences-dialog')).toBeInTheDocument();
   });
 
-  it('印刷詳細設定からサークルリスト印刷 → プレビュー → 印刷中 まで進める', async () => {
+  it('印刷詳細設定は 4 タブの 1 枚で、タブを切り替えてプレビュー → 印刷中 まで進める', async () => {
     const { user } = await renderApp();
     await chooseMenu(user, 'ファイル(F)', /^印刷詳細設定/);
-    const chooser = await screen.findByTestId('list-dialog');
-    await user.dblClick(within(chooser).getByText('サークルリスト印刷'));
+    const dialog = await screen.findByTestId('print-settings-dialog');
 
-    const settings = await screen.findByTestId('print-list-dialog');
-    await user.click(within(settings).getByTestId('print-list-preview'));
+    // 元ダイアログ 163〜166 が 1 枚のタブになっている。
+    expect(within(dialog).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'サークルリスト印刷',
+      'サークルカット印刷',
+      'マップ印刷',
+      '白地図印刷',
+    ]);
+
+    // 既定はサークルリスト印刷のタブ。
+    expect(dialog).toHaveTextContent('印刷項目');
+    // タブを切り替えるとマップ印刷の項目になる。
+    await user.click(within(dialog).getByRole('link', { name: 'マップ印刷' }));
+    expect(dialog).toHaveTextContent('指示線');
+
+    // プレビューは別ウィンドウで開き、閉じると印刷詳細設定に戻る。
+    await user.click(within(dialog).getByRole('button', { name: 'プレビュー' }));
     expect(await screen.findByTestId('print-preview-window')).toBeInTheDocument();
+    // マップ印刷タブなので、会場図のプレビューが出る。
+    expect(screen.getByTestId('preview-print-map')).toBeInTheDocument();
+    await user.click(screen.getByTestId('preview-close'));
+    expect(screen.queryByTestId('print-preview-window')).not.toBeInTheDocument();
 
-    await user.click(screen.getByTestId('preview-print'));
+    // 印刷 (元実装は印刷ダイアログで実行する。Web 版はここからダミーの進捗を出す)。
+    await user.click(within(dialog).getByTestId('print-settings-print'));
     expect(await screen.findByTestId('print-progress-dialog')).toBeInTheDocument();
   });
 
@@ -471,7 +521,7 @@ describe('App — 残りのダイアログをメニューから開ける', () =>
     await chooseMenu(user, 'ファイル(F)', /^印刷\(P\)/);
     const printDialog = await screen.findByTestId('print-dialog');
     await user.click(within(printDialog).getByTestId('print-submit'));
-    expect(await screen.findByTestId('print-list-dialog')).toBeInTheDocument();
+    expect(await screen.findByTestId('print-settings-dialog')).toBeInTheDocument();
   });
 
   it('ブックマークを追加できる', async () => {
@@ -498,5 +548,697 @@ describe('App — 残りのダイアログをメニューから開ける', () =>
     const { user } = await renderApp();
     await chooseMenu(user, 'ファイル(F)', /^チェックリストを circle\.ms にエクスポート/);
     expect(await screen.findByTestId('export-result-dialog')).toBeInTheDocument();
+  });
+
+  it('画像ファイル出力は説明・詳細設定・出力まで進められる (ダイアログ 197)', async () => {
+    const { user } = await renderApp();
+    await chooseMenu(user, 'ファイル(F)', /^画像ファイル出力/);
+    const dialog = await screen.findByTestId('image-output-dialog');
+    expect(dialog).toHaveTextContent('※ ページ番号と拡張子".bmp"が付加されます。');
+
+    // 説明 (1646) → 説明ダイアログ。閉じると画像ファイル出力に戻る。
+    await user.click(within(dialog).getByTestId('image-output-help'));
+    const help = await screen.findByTestId('image-output-help-dialog');
+    expect(help).toHaveTextContent('BMPファイル出力');
+    await user.click(within(help).getByTestId('image-output-help-close'));
+    expect(screen.getByTestId('image-output-dialog')).toBeInTheDocument();
+
+    // 詳細設定 (1051) → 出力形式の詳細 (既定はサークルリスト印刷)。
+    await user.click(within(dialog).getByTestId('image-output-details'));
+    const details = await screen.findByTestId('print-list-dialog');
+    await user.click(within(details).getByRole('button', { name: '閉じる' }));
+
+    // ページ指定で出力 → 指定したページ数がステータスバーに出る。
+    await user.click(within(dialog).getByLabelText('ページ指定 :'));
+    const pages = within(dialog).getByTestId('image-output-pages');
+    await user.clear(pages);
+    await user.type(pages, '1-3');
+    await user.click(within(dialog).getByTestId('image-output-submit'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('main-window')).toHaveTextContent('3 ページを BMP で出力しました'),
+    );
+  });
+});
+
+describe('App — チェックツールバー (33001〜33009 / 33020)', () => {
+  /** 起動時のダミー登録の件数 (1 日目 20 / 翌日以降 各 14 / 抽選漏れ 3)。 */
+  const DEMO_TOTAL = 65;
+
+  it('色ボタンは選択中のサークルをその色でチェックに追加する', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL} 件`));
+
+    await user.click(within(main).getByRole('button', { name: '色5' }));
+
+    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL + 1} 件`));
+    // 選択中のカットのスペース番号ボックスが、押した色で塗られる。
+    const cell = screen.getByTestId('cut-view').querySelector('.cut-cell--selected');
+    expect(cell).not.toBeNull();
+    const space = cell?.querySelector('.cut-cell__space') as HTMLElement;
+    expect(space).toHaveStyle({ background: CHECK_COLOR_HEX[5] });
+  });
+
+  it('登録済みのサークルの色ボタンは色だけ変える (件数は増えない)', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL} 件`));
+
+    await user.click(within(main).getByRole('button', { name: '色3' }));
+    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL + 1} 件`));
+    await user.click(within(main).getByRole('button', { name: '色7' }));
+
+    expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL + 1} 件`);
+    const cell = screen.getByTestId('cut-view').querySelector('.cut-cell--selected');
+    const space = cell?.querySelector('.cut-cell__space') as HTMLElement;
+    expect(space).toHaveStyle({ background: CHECK_COLOR_HEX[7] });
+  });
+
+  it('チェックリストから外すボタンは選択中のサークルを外す', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL} 件`));
+
+    await user.click(within(main).getByRole('button', { name: '色1' }));
+    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL + 1} 件`));
+
+    await user.click(within(main).getByRole('button', { name: 'チェックリストから外す' }));
+
+    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL} 件`));
+    const cell = screen.getByTestId('cut-view').querySelector('.cut-cell--selected');
+    const space = cell?.querySelector('.cut-cell__space') as HTMLElement;
+    expect(space.style.background).toBe('');
+  });
+});
+
+describe('App — 表示の拡大率 (幅 / 高さ / 全体 / 元のサイズ)', () => {
+  /** カットビューの表示領域 (jsdom にはレイアウトが無いので計測だけ差し替える)。 */
+  function mockViewBox(width: number, height: number) {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: height,
+      width,
+      height,
+      toJSON: () => ({}),
+    });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('幅 / 高さ に合わせると、カットビューの表示領域から拡大率を決める', async () => {
+    // 幅 534px はカット 178px x 6 列 の半分 → 50%。
+    // 高さ 1012px は 6 行 (253px x 6 = 1518px) の 2/3 → 67%。
+    mockViewBox(534, 1012);
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    const zoomInput = within(main).getByRole('textbox', { name: '拡大率' });
+
+    await user.click(within(main).getByRole('button', { name: '幅に合わせる' }));
+    await waitFor(() => expect(zoomInput).toHaveValue('50%'));
+    expect(main).toHaveTextContent('ズーム 50%');
+
+    await user.click(within(main).getByRole('button', { name: '高さに合わせる' }));
+    await waitFor(() => expect(zoomInput).toHaveValue('67%'));
+  });
+
+  it('全体を表示 (メニュー) は幅と高さの小さい方に合わせる', async () => {
+    mockViewBox(534, 1012);
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+
+    await chooseMenu(user, '表示(V)', /^全体を表示/);
+
+    expect(within(main).getByRole('textbox', { name: '拡大率' })).toHaveValue('50%');
+  });
+
+  it('元のサイズは 100% に戻し、カットを実寸 178px の列で並べる', async () => {
+    mockViewBox(534, 1012);
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+
+    await user.click(within(main).getByRole('button', { name: '元のサイズ' }));
+
+    await waitFor(() =>
+      expect(within(main).getByRole('textbox', { name: '拡大率' })).toHaveValue('100%'),
+    );
+    const grid = screen.getByTestId('cut-view').firstElementChild as HTMLElement;
+    expect(grid.style.gridTemplateColumns).toBe('repeat(6, 178px)');
+  });
+});
+
+describe('App — ツールバー (実物の既定の並び)', () => {
+  it('既定は 4 本 22 ボタン (基本 / ページ移動 / 表示 / チェック)。ナビゲートバーは出さない', async () => {
+    await renderApp();
+    const band = await screen.findByTestId('main-toolbar');
+
+    expect(screen.getByTestId('toolbar-group-basic')).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-group-jump')).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-group-view')).toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-group-check')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-group-nav')).toBeNull();
+
+    // 実物のツールバー 1 行ぶんのボタン (22 個) + ツールバー内の「色編集」。
+    const labels = [...band.querySelectorAll('button')]
+      .map((button) => button.getAttribute('aria-label'))
+      .filter((label): label is string => label !== null);
+    expect(labels.slice(0, 4)).toEqual(['新規作成', 'チェックリストを開く', 'チェックリストの保存', '印刷']);
+    expect(labels).toContain('前のページ');
+    expect(labels).toContain('ズームイン');
+    expect(labels.filter((label) => /^色\d$/.test(label))).toHaveLength(9);
+  });
+});
+
+describe('App — ナビゲート (前に戻る / 次に進む)', () => {
+  it('ナビゲートバーを表示 > ツールバーで出し、戻る / 進む で行き来できる', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+
+    // 実物の既定は 4 本 (基本 / ページ移動 / 表示 / チェック)。ナビゲートバーは隠れている。
+    expect(within(main).queryByRole('button', { name: '戻る' })).toBeNull();
+    await chooseMenu(user, '表示(V)', /^ツールバー/);
+    await user.click(await screen.findByRole('menuitem', { name: /ナビゲートバー/ }));
+    expect(within(main).getByRole('button', { name: '戻る' })).toBeInTheDocument();
+    // 起動時に表示するページ (先頭のサークルのページ) と、最後のページ。
+    const firstPage = dummy.circles[0].pageNo;
+    const targetPage = Math.max(...dummy.circles.map((circle) => circle.pageNo));
+    await waitFor(() => expect(main).toHaveTextContent(`ページ ${firstPage}`));
+
+    await chooseMenu(user, 'ページ移動(J)', /^ページ指定で移動/);
+    const input = await screen.findByTestId('goto-page-input');
+    await user.clear(input);
+    await user.type(input, String(targetPage));
+    await user.click(screen.getByTestId('goto-page-submit'));
+    await waitFor(() => expect(main).toHaveTextContent(`ページ ${targetPage}`));
+
+    await user.click(within(main).getByRole('button', { name: '戻る' }));
+    await waitFor(() => expect(main).toHaveTextContent(`ページ ${firstPage}`));
+
+    await user.click(within(main).getByRole('button', { name: '進む' }));
+    await waitFor(() => expect(main).toHaveTextContent(`ページ ${targetPage}`));
+  });
+});
+
+describe('App — 動作設定 (ダイアログ 150) の反映', () => {
+  it('シングルクリックでチェックする (1026) を入れると、1 回のクリックでチェックに載る', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+
+    await toggleSetting(user, 'シングルクリックでチェックする');
+
+    const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
+    await user.click(cells[1] as HTMLElement);
+
+    expect(cells[1]).toHaveClass('cut-cell--checked');
+    // ステータスバーはマウスの下のサークル情報に切り替わるので、離してから件数を見る。
+    await user.unhover(cells[1] as HTMLElement);
+    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+  });
+
+  it('選択カーソルをマウスカーソルに追従する (1024) を入れると、かざしたカットが選択される', async () => {
+    const { user } = await renderApp();
+    await toggleSetting(user, '選択カーソルをマウスカーソルに追従する');
+
+    const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
+    await user.hover(cells[2] as HTMLElement);
+
+    expect(cells[2]).toHaveClass('cut-cell--selected');
+  });
+
+  it('リターンキーで次のサークルへ移動 (1021) は既定で有効。Enter でチェックして次のカットへ進む', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
+
+    (cells[0] as HTMLElement).focus();
+    await user.keyboard('{Enter}');
+
+    expect(cells[0]).toHaveClass('cut-cell--checked');
+    expect(cells[1]).toHaveClass('cut-cell--selected');
+    // カーソルが移ったので、ステータスバーのページ表示も変わらない (同じページ内)。
+    (cells[0] as HTMLElement).blur();
+    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+  });
+
+  it('ページ変更時に左上のカットへカーソルを合わせる (1710) を入れると、ページ移動で先頭が選ばれる', async () => {
+    const { user } = await renderApp();
+    await waitFor(() => expect(screen.getByTestId('main-window')).toBeInTheDocument());
+    await toggleSetting(user, 'ページ変更時に常に左上のサークルカットにカーソルを合わせる');
+
+    // 起動時とは違うページへ移動する (サークルのいるページ)。
+    const targetPage = Math.max(...dummy.circles.map((circle) => circle.pageNo));
+    await chooseMenu(user, 'ページ移動(J)', /^ページ指定で移動/);
+    const input = await screen.findByTestId('goto-page-input');
+    await user.clear(input);
+    await user.type(input, String(targetPage));
+    await user.click(screen.getByTestId('goto-page-submit'));
+
+    const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
+    await waitFor(() => expect(cells[0]).toHaveClass('cut-cell--selected'));
+  });
+});
+
+describe('App — Google 検索・用紙・一覧追従・アイコン化・表紙の設定反映', () => {
+  it('Google 検索の条件設定 (212) で「いずれかを含む」を選ぶと OR で検索する', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const { user } = await renderApp();
+
+    await chooseMenu(user, '検索(S)', /^Google検索の条件設定/);
+    const dialog = await screen.findByTestId('google-search-dialog');
+    await user.click(within(dialog).getByLabelText('『サークル名』と『執筆者名』のいずれかを含む'));
+    await user.click(within(dialog).getByTestId('google-search-close'));
+
+    await chooseMenu(user, '検索(S)', /^サークルをGoogleで検索/);
+
+    const circle = dummy.circles[0];
+    expect(open).toHaveBeenCalledWith(
+      `https://www.google.com/search?q=${encodeURIComponent(
+        `${circle.circleName} OR ${circle.penName}`,
+      )}`,
+      '_blank',
+      'noreferrer',
+    );
+  });
+
+  it('用紙サイズ・余白 (203) の設定は印刷プレビューに出る', async () => {
+    const { user } = await renderApp();
+
+    await chooseMenu(user, 'ファイル(F)', /^印刷詳細設定/);
+    const settings = await screen.findByTestId('print-settings-dialog');
+    await user.click(within(settings).getByTestId('print-settings-page-setup'));
+    const setup = await screen.findByTestId('page-setup-dialog');
+    const dpi = within(setup).getByLabelText('DPI');
+    await user.clear(dpi);
+    await user.type(dpi, '600');
+    await user.click(within(setup).getByTestId('page-setup-close'));
+
+    await user.click(within(settings).getByRole('button', { name: 'プレビュー' }));
+
+    expect(await screen.findByTestId('preview-page-setup')).toHaveTextContent('600dpi');
+  });
+
+  it('一覧の追従 (1022) を入れると、選んだサークルの日付とブロックへ一覧が切り替わる', async () => {
+    const { user } = await renderApp();
+    await toggleSetting(user, '選択サークルのブロックが変わった際にサークル一覧の表示も追従する');
+
+    const targetPage = Math.max(...dummy.circles.map((circle) => circle.pageNo));
+    await chooseMenu(user, 'ページ移動(J)', /^ページ指定で移動/);
+    const input = await screen.findByTestId('goto-page-input');
+    await user.clear(input);
+    await user.type(input, String(targetPage));
+    await user.click(screen.getByTestId('goto-page-submit'));
+
+    const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
+    await user.click(cells[0] as HTMLElement);
+
+    const target = dummy.circles.filter((circle) => circle.pageNo === targetPage)[0];
+    const list = screen.getByTestId('list-window');
+    await waitFor(() => expect(within(list).getByTestId('list-day')).toHaveValue(String(target.day)));
+    await waitFor(() =>
+      expect(within(list).getByTestId('list-block')).toHaveValue(String(target.blockId)),
+    );
+  });
+
+  it('個別窓のアイコン化を連動する (1714) を入れると、1 つ最小化すると子ウィンドウが全部たたまれる', async () => {
+    const { user } = await renderApp();
+    await toggleSetting(user, '個別窓のアイコン化を連動する');
+
+    const detail = screen.getByTestId('detail-window');
+    await user.click(within(detail).getByRole('button', { name: 'Minimize' }));
+
+    await waitFor(() => expect(screen.queryByTestId('detail-window')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('list-window')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('checklist-window')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('map-window')).not.toBeInTheDocument();
+
+    // ウィンドウメニューから戻せる。
+    await chooseMenu(user, 'ウィンドウ(W)', /^サークル詳細/);
+    expect(await screen.findByTestId('detail-window')).toBeInTheDocument();
+  });
+
+  it('起動時に表紙画像を表示する (1711) を入れると表紙ウィンドウが出て、閉じられる', async () => {
+    const { user } = await renderApp();
+    await toggleSetting(user, '起動時に表紙画像を表示する');
+
+    const cover = await screen.findByTestId('cover-dialog');
+    expect(cover).toHaveTextContent(dummy.info.comiketName);
+
+    await user.click(within(cover).getByTestId('cover-close'));
+    expect(screen.queryByTestId('cover-dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('App — メニューの残り (ファイル / 表示 / ページ移動 / チェックリスト / 検索 / ヘルプ)', () => {
+  it('新規作成 (32818) はチェックリストを空にする', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+
+    await chooseMenu(user, 'ファイル(F)', /^新規作成/);
+
+    await waitFor(() => expect(main).toHaveTextContent('チェック 0 件'));
+  });
+
+  it('チェックリストの保存 (32794) は CSV をダウンロードする', async () => {
+    const createObjectURL = vi.fn(() => 'blob:ccatalog');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+
+    await chooseMenu(user, 'ファイル(F)', /^チェックリストの保存/);
+
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(click).toHaveBeenCalled();
+    expect(main).toHaveTextContent('チェックリスト 65 件を保存しました');
+  });
+
+  it('前のブロック / 次のブロック (32865 / 32864) でカーソルが別のブロックへ移る', async () => {
+    const { user } = await renderApp();
+    const cutView = screen.getByTestId('cut-view');
+    const selectedLabel = () =>
+      cutView.querySelector('.cut-cell--selected')?.getAttribute('aria-label') ?? '';
+    await waitFor(() => expect(selectedLabel()).not.toBe(''));
+    const before = selectedLabel();
+
+    await chooseMenu(user, 'ページ移動(J)', /^次のブロック/);
+    await waitFor(() => expect(selectedLabel()).not.toBe(before));
+    const afterNext = selectedLabel();
+
+    await chooseMenu(user, 'ページ移動(J)', /^前のブロック/);
+    await waitFor(() => expect(selectedLabel()).not.toBe(afterNext));
+  });
+
+  it('全てのメモを消去する (32874) と、詳細ウィンドウのメモが消える', async () => {
+    const { user } = await renderApp();
+    const cutView = await screen.findByTestId('cut-view');
+    await user.click(cutView.querySelector('.cut-cell') as HTMLElement);
+
+    await chooseMenu(user, 'チェックリスト(A)', /^サークルのメモを編集する/);
+    const memoInput = await screen.findByTestId('memo-input');
+    await user.clear(memoInput);
+    await user.type(memoInput, '東館 先に寄る');
+    await user.click(screen.getByTestId('memo-save'));
+    const detail = await screen.findByTestId('detail-window');
+    await waitFor(() => expect(within(detail).getByText('東館 先に寄る')).toBeInTheDocument());
+
+    await chooseMenu(user, 'チェックリスト(A)', /^全てのメモを消去する/);
+
+    await waitFor(() =>
+      expect(within(detail).queryByText('東館 先に寄る')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('選択サークルをコピー (1707) して、チェックリストにペースト (1708) できる', async () => {
+    let clipboard = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          clipboard = text;
+          return Promise.resolve();
+        },
+        readText: () => Promise.resolve(clipboard),
+      },
+    });
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+
+    await chooseMenu(user, 'チェックリスト(A)', /^選択サークルをクリップボードにコピー/);
+    await waitFor(() => expect(main).toHaveTextContent('コピーしました'));
+
+    await chooseMenu(user, 'チェックリスト(A)', /^クリップボードからチェックリストにペースト/);
+
+    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+  });
+
+  it('リスト中のカット表示 (32868) を入れると一覧にカットの列が出る', async () => {
+    const { user } = await renderApp();
+    const list = await screen.findByTestId('list-window');
+    expect(within(list).queryAllByTestId('list-cut')).toHaveLength(0);
+
+    await chooseMenu(user, '表示(V)', /^リスト中のカット表示/);
+
+    await waitFor(() => expect(within(list).getAllByTestId('list-cut').length).toBeGreaterThan(0));
+    expect(within(list).getAllByTestId('list-cut')[0]).toHaveAttribute(
+      'src',
+      expect.stringMatching(/^\/cuts\/\d+\.png$/),
+    );
+  });
+
+  it('高解像度表示 (32867) を切ると地図が PNG に切り替わる', async () => {
+    const { user } = await renderApp();
+    expect(await screen.findByTestId('map-image')).toHaveAttribute(
+      'src',
+      `/maps/${dummy.maps[0].filename}.svg`,
+    );
+
+    await chooseMenu(user, '表示(V)', /高解像度表示/);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('map-image')).toHaveAttribute(
+        'src',
+        `/maps/${dummy.maps[0].filename}.png`,
+      ),
+    );
+  });
+
+  it('アンチエイリアス (32792) を切るとカット画像がドット等倍になる', async () => {
+    const { user } = await renderApp();
+    const image = screen.getByTestId('cut-view').querySelector('img') as HTMLElement;
+    expect(image.style.imageRendering).not.toBe('pixelated');
+
+    await chooseMenu(user, '表示(V)', /アンチエイリアス/);
+
+    await waitFor(() =>
+      expect((screen.getByTestId('cut-view').querySelector('img') as HTMLElement).style.imageRendering).toBe('pixelated'),
+    );
+  });
+
+  it('サークルのWEBページを開く (32859) は登録された URL を開く', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const { user } = await renderApp();
+    const circle = dummy.circles[0];
+
+    await chooseMenu(user, '検索(S)', /^サークルのWEBページを開く/);
+
+    if (circle.url.length === 0) {
+      expect(open).not.toHaveBeenCalled();
+      expect(screen.getByTestId('main-window')).toHaveTextContent('登録されていません');
+    } else {
+      expect(open).toHaveBeenCalledWith(circle.url, '_blank', 'noreferrer');
+    }
+  });
+
+  it('ヘルプの目次 (32815) を開き、キーワードで絞り込める', async () => {
+    const { user } = await renderApp();
+
+    await chooseMenu(user, 'ヘルプ(H)', /^目次/);
+    const help = await screen.findByTestId('help-dialog');
+    expect(within(help).getAllByTestId('help-topic').length).toBeGreaterThan(1);
+
+    await user.type(within(help).getByLabelText('キーワード'), 'ジャンル表示');
+
+    await waitFor(() => expect(within(help).getAllByTestId('help-topic')).toHaveLength(1));
+    expect(within(help).getByTestId('help-content')).toHaveTextContent('机');
+  });
+
+  it('チェックリストの RSS ボタンはダミーの取得結果を出す', async () => {
+    const { user } = await renderApp();
+    const checklist = await screen.findByTestId('checklist-window');
+
+    await user.click(within(checklist).getByRole('button', { name: 'RSS' }));
+
+    expect(screen.getByTestId('main-window')).toHaveTextContent('RSS情報を取得しました');
+  });
+
+  it('標準のチェック色 (サブメニュー) で登録する色が変わる', async () => {
+    const { user } = await renderApp();
+    await waitFor(() =>
+      expect(screen.getByTestId('main-window')).toHaveTextContent('チェック 65 件'),
+    );
+
+    await chooseSubmenu(user, 'チェックリスト(A)', /^標準のチェック色/, /^色5$/);
+
+    const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
+    await user.dblClick(cells[1] as HTMLElement);
+
+    const space = cells[1].querySelector('.cut-cell__space') as HTMLElement;
+    await waitFor(() => expect(space).toHaveStyle({ background: CHECK_COLOR_HEX[5] }));
+  });
+
+  it('ツールバー表示の切替 (サブメニュー) でバーが消える', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    expect(within(main).getByTestId('toolbar-group-basic')).toBeInTheDocument();
+
+    await chooseSubmenu(user, '表示(V)', /^ツールバー/, /基本バー/);
+
+    await waitFor(() =>
+      expect(within(main).queryByTestId('toolbar-group-basic')).not.toBeInTheDocument(),
+    );
+    expect(within(main).getByTestId('toolbar-group-jump')).toBeInTheDocument();
+  });
+});
+
+describe('App — 保存 (元実装の INI / チェックリストファイル相当)', () => {
+  it('動作設定は次の起動でも残る', async () => {
+    const { user } = await renderApp();
+    await toggleSetting(user, 'シングルクリックでチェックする');
+    cleanup();
+
+    render(<App startup={false} />);
+    await screen.findByTestId('main-window');
+    await chooseMenu(user, 'ファイル(F)', /^動作設定\(C\)\.\.\./);
+
+    expect(await screen.findByLabelText('シングルクリックでチェックする')).toBeChecked();
+  });
+
+  it('起動時に前回のチェックリストを読み込む (1664) を入れると、次の起動でもチェックリストが残る', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    await toggleSetting(user, '起動時に前回使用したチェックリストを自動的に読み込む');
+
+    // 1 件登録して 66 件にする。
+    const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
+    await user.dblClick(cells[1] as HTMLElement);
+    expect(cells[1]).toHaveClass('cut-cell--checked');
+    // ステータスバーはマウスの下のサークル情報に切り替わるので、離してから件数を見る。
+    await user.unhover(cells[1] as HTMLElement);
+    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+    cleanup();
+
+    render(<App startup={false} />);
+
+    // 読み込んだチェックリストがあるので、デモ用のダミー登録は入れ直さない。
+    await waitFor(() =>
+      expect(screen.getByTestId('main-window')).toHaveTextContent('チェック 66 件'),
+    );
+  });
+});
+
+describe('App — 動作設定 (プロパティシート)', () => {
+  /** 動作設定を開いて、指定したページを選ぶ。 */
+  async function openPage(user: UserEvent, label: string) {
+    await chooseMenu(user, 'ファイル(F)', /^動作設定\(C\)\.\.\./);
+    const dialog = await screen.findByTestId('preferences-dialog');
+    if (label !== '動作オプション') {
+      // タブは <li role="tab"> の中の <a> が押せる (ライブラリの実装)。
+      await user.click(within(dialog).getByRole('link', { name: label }));
+    }
+    return dialog;
+  }
+
+  it('元実装と同じ 4 ページを持ち、ウィンドウは 487 x 670 (ラベルが折り返さない幅)', async () => {
+    const { user } = await renderApp();
+    const dialog = await openPage(user, '動作オプション');
+
+    expect(within(dialog).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      '動作オプション',
+      '画像データパス',
+      'リスト表示',
+      '色の設定',
+    ]);
+    const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
+    expect(root.style.width).toBe('487px');
+    expect(root.style.height).toBe('670px');
+  });
+
+  it('各ページに元ダイアログの項目が並ぶ', async () => {
+    const { user } = await renderApp();
+
+    // ② 画像データパス (元ダイアログ 191)
+    let dialog = await openPage(user, '画像データパス');
+    expect(within(dialog).getByLabelText('自動検索する')).toBeChecked();
+    expect(within(dialog).getByLabelText('指定場所から読み込む')).not.toBeChecked();
+    expect(within(dialog).getByLabelText('画像データの場所')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('標準')).toBeChecked();
+    expect(within(dialog).getByLabelText('ブラウザの場所')).toBeInTheDocument();
+    await user.click(within(dialog).getByTestId('preferences-close'));
+
+    // ③ リスト表示 (元ダイアログ 210)
+    dialog = await openPage(user, 'リスト表示');
+    expect(within(dialog).getByText('チェックリスト 表示項目')).toBeInTheDocument();
+    expect(within(dialog).getByText('サークル一覧 表示項目')).toBeInTheDocument();
+    expect(within(dialog).getAllByRole('button', { name: '前へ移動' })).toHaveLength(2);
+    expect(within(dialog).getAllByRole('button', { name: '後へ移動' })).toHaveLength(2);
+    expect(within(dialog).getByTestId('preferences-list-default')).toBeInTheDocument();
+    await user.click(within(dialog).getByTestId('preferences-close'));
+
+    // ④ 色の設定 (元ダイアログ 149)
+    dialog = await openPage(user, '色の設定');
+    expect(within(dialog).getByLabelText('編集するチェック色')).toHaveValue('standard');
+    expect(within(dialog).getByTestId('display-color-1')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('print-color-9')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('色の名称')).toHaveValue('');
+    expect(within(dialog).getByTestId('preferences-color-reset')).toBeEnabled();
+    // 標準の設定値を編集中は Mac 版の既定色が無いので使えない。
+    expect(within(dialog).getByTestId('preferences-color-mac-reset')).toBeDisabled();
+  });
+
+  it('画像データパスで「指定場所から読み込む」にすると、画像の取得元が変わる', async () => {
+    const { user } = await renderApp();
+    const dialog = await openPage(user, '画像データパス');
+
+    await user.click(within(dialog).getByLabelText('指定場所から読み込む'));
+    await user.clear(within(dialog).getByLabelText('画像データの場所'));
+    await user.type(within(dialog).getByLabelText('画像データの場所'), 'https://cdn.example.com/img');
+    await user.click(within(dialog).getByTestId('preferences-close'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('cut-view').querySelector('img')).toHaveAttribute(
+        'src',
+        expect.stringMatching(/^https:\/\/cdn\.example\.com\/img\/cuts\/\d+\.png$/),
+      ),
+    );
+  });
+
+  it('リスト表示で列を外すとチェックリストの列が消える', async () => {
+    const { user } = await renderApp();
+    const checklist = await screen.findByTestId('checklist-window');
+    expect(within(checklist).getByRole('columnheader', { name: 'ジャンル' })).toBeInTheDocument();
+
+    const dialog = await openPage(user, 'リスト表示');
+    await user.click(within(dialog).getByLabelText('ジャンル'));
+    await user.click(within(dialog).getByTestId('preferences-close'));
+
+    await waitFor(() =>
+      expect(within(checklist).queryByRole('columnheader', { name: 'ジャンル' })).not.toBeInTheDocument(),
+    );
+    // サークル名は外せない (5LIST.HTM)。
+    expect(within(checklist).getByRole('columnheader', { name: 'サークル名' })).toBeInTheDocument();
+  });
+
+  it('色の設定で表示色を変えると、チェックしたカットの色が変わる', async () => {
+    const { user } = await renderApp();
+    const main = screen.getByTestId('main-window');
+    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    // 選択中のサークルを色1 でチェックする。
+    await user.click(within(main).getByRole('button', { name: '色1' }));
+    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+
+    const dialog = await openPage(user, '色の設定');
+    await user.click(within(dialog).getByTestId('display-color-1'));
+    const palette = await screen.findByTestId('color-palette-dialog');
+    await user.click(within(palette).getByRole('button', { name: '#ffffff' }));
+    await user.click(within(palette).getByTestId('palette-ok'));
+    await user.click(within(dialog).getByTestId('preferences-close'));
+
+    const space = screen
+      .getByTestId('cut-view')
+      .querySelector('.cut-cell--selected .cut-cell__space') as HTMLElement;
+    await waitFor(() => expect(space).toHaveStyle({ background: '#ffffff' }));
   });
 });

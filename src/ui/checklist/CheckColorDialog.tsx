@@ -1,13 +1,12 @@
-import { useState, type CSSProperties } from 'react';
-import { Button, OptionButton, Window } from '@megablacklabel/react98retro';
-import type { CheckColor } from '../../app/catalog-state';
+import type { CSSProperties } from 'react';
+import { Button, Window } from '@megablacklabel/react98retro';
+import type { CheckColorSettings } from '../../domain/app-settings';
+import { CheckColorEditor } from './CheckColorEditor';
 
 export type CheckColorDialogProps = {
-  /** 色1〜色9 の名称 (index 0 が「色1」)。空文字なら「色N」。 */
-  colorNames: readonly string[];
-  /** 現在のチェック色。0 は標準色。 */
-  current: CheckColor;
-  onSelect: (color: CheckColor) => void;
+  /** 色の設定 (表示色 / 印刷色 / 名称 / 編集するチェック色)。 */
+  checkColors: CheckColorSettings;
+  onChange: (patch: Partial<CheckColorSettings>) => void;
   onClose: () => void;
   initialX?: number;
   initialY?: number;
@@ -16,69 +15,41 @@ export type CheckColorDialogProps = {
   zIndex?: number;
 };
 
-/** 標準色 + 色1〜色9 (元実装のチェック色ダイアログと同じ並び)。 */
-const COLOR_CHOICES: readonly CheckColor[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-/** チェック色の見本色。0 は標準色 (色分けなし)。ChecklistWindow と同じ値を並べてある。 */
-const SWATCHES: Record<CheckColor, string> = {
-  0: '#ffffff',
-  1: '#ff0000',
-  2: '#ff8000',
-  3: '#ffff00',
-  4: '#008000',
-  5: '#00ffff',
-  6: '#0000c0',
-  7: '#800080',
-  8: '#ff00ff',
-  9: '#808080',
-};
-
-const LIST_STYLE: CSSProperties = {
+const BODY_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 2,
+  gap: 8,
+  padding: 6,
   flex: '1 1 auto',
   minHeight: 0,
   overflow: 'auto',
-};
-
-const ROW_LABEL_STYLE: CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6 };
-
-const SWATCH_STYLE: CSSProperties = {
-  display: 'inline-block',
-  width: 12,
-  height: 12,
-  border: '1px solid #808080',
-  verticalAlign: 'middle',
+  fontSize: 12,
 };
 
 const BUTTON_ROW_STYLE: CSSProperties = {
   display: 'flex',
   justifyContent: 'flex-end',
-  gap: 6,
+  padding: '0 6px 6px',
   flex: '0 0 auto',
-  paddingTop: 6,
 };
 
-function colorLabel(color: CheckColor, colorNames: readonly string[]): string {
-  if (color === 0) return '標準色';
-  return colorNames[color - 1] || `色${color}`;
-}
-
-/** チェック色ダイアログ。選択中のサークルに付ける色を 標準色 + 色1〜色9 から選ぶ。 */
+/**
+ * チェック色の編集 (元実装のダイアログ 149 「チェック色」)。
+ * メニューの「チェックリスト > チェック色の編集」(61227) と、ツールバーの「色編集」から開く。
+ *
+ * ウィンドウの寸法はダイアログ 149 の資源寸法 404 x 375 (ダイアログ単位) に、
+ * 動作設定 (411 x 452 → 実測 439 x 670) と同じ比率を当てた 431 x 577。
+ */
 export function CheckColorDialog({
-  colorNames,
-  current,
-  onSelect,
+  checkColors,
+  onChange,
   onClose,
-  initialX = 340,
-  initialY = 180,
-  width = 240,
-  height = 330,
+  initialX = 300,
+  initialY = 40,
+  width = 431,
+  height = 577,
   zIndex,
 }: CheckColorDialogProps) {
-  const [selected, setSelected] = useState<CheckColor>(current);
-
   return (
     <Window
       data-testid="check-color-dialog"
@@ -91,32 +62,12 @@ export function CheckColorDialog({
       initialY={initialY}
       zIndex={zIndex}
     >
-      <div style={LIST_STYLE} role="radiogroup" aria-label="チェック色">
-        {COLOR_CHOICES.map((color) => (
-          <OptionButton
-            key={color}
-            id={`check-color-${color}`}
-            name="check-color"
-            data-color={color}
-            data-selected={color === selected ? 'true' : undefined}
-            aria-checked={color === selected}
-            checked={color === selected}
-            onChange={() => setSelected(color)}
-            label={
-              <span style={ROW_LABEL_STYLE}>
-                <span aria-hidden="true" style={{ ...SWATCH_STYLE, background: SWATCHES[color] }} />
-                {colorLabel(color, colorNames)}
-              </span>
-            }
-          />
-        ))}
+      <div style={BODY_STYLE}>
+        <CheckColorEditor checkColors={checkColors} onChange={onChange} />
       </div>
       <div style={BUTTON_ROW_STYLE}>
-        <Button type="button" onClick={() => onSelect(selected)}>
-          OK
-        </Button>
-        <Button type="button" onClick={onClose}>
-          キャンセル
+        <Button variant="default" data-testid="check-color-close" onClick={onClose}>
+          閉じる
         </Button>
       </div>
     </Window>
