@@ -165,9 +165,6 @@ export function PrintPreviewWindow({
   useEffect(() => {
     setPageDraft(String(pageNo));
   }, [pageNo]);
-  useEffect(() => {
-    setPageDraft(String(pageNo));
-  }, [pageNo]);
 
   return (
     <Window

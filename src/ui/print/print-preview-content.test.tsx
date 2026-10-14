@@ -2,7 +2,13 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { ChecklistEntry } from '../../app/catalog-state';
 import type { Circle, LayoutInfo, MapInfo } from '../../domain/types';
-import { PrintMapPreview, orderPrintRows, printTargetCircles } from './print-preview-content';
+import {
+  PrintCutPreview,
+  PrintListPreview,
+  PrintMapPreview,
+  orderPrintRows,
+  printTargetCircles,
+} from './print-preview-content';
 
 function makeCircle(over: Partial<Circle> & { id: number }): Circle {
   return {
@@ -208,5 +214,123 @@ describe('PrintMapPreview (マップ印刷のプレビュー)', () => {
   it('白地図印刷では位置を塗らない', () => {
     render(mapPreview({ blank: true, sketch: true }));
     expect(screen.queryAllByTestId('preview-map-seat')).toHaveLength(0);
+  });
+});
+
+/** ページ割りをまたぐ件数の行 (横向き 1 ページ = 24 件)。 */
+const MANY_ROWS = Array.from({ length: 30 }, (_, index) => ({
+  circle: makeCircle({ id: 100 + index, spaceNo: 100 + index, blockId: 5 }),
+  color: ((index % 9) + 1) as 1,
+}));
+const PRINT_ITEMS = ['サークル名', '配置', '色'];
+const dayLabel = () => '1日目';
+const genreName = () => 'ジャンルA';
+
+describe('PrintListPreview (サークルリスト印刷のプレビュー)', () => {
+  it('1 ページ目は横向き 24 件、2 ページ目は続きを出す', () => {
+    render(
+      <PrintListPreview
+        rows={MANY_ROWS}
+        items={PRINT_ITEMS}
+        dayLabelOf={dayLabel}
+        genreNameOf={genreName}
+        printSequenceNumber={false}
+        layout="landscape1"
+        pageNo={1}
+        pageCount={2}
+      />,
+    );
+    // thead 1 行 + 24 件。
+    expect(screen.getAllByRole('row')).toHaveLength(25);
+    cleanup();
+
+    render(
+      <PrintListPreview
+        rows={MANY_ROWS}
+        items={PRINT_ITEMS}
+        dayLabelOf={dayLabel}
+        genreNameOf={genreName}
+        printSequenceNumber={false}
+        layout="landscape1"
+        pageNo={2}
+        pageCount={2}
+      />,
+    );
+    expect(screen.getAllByRole('row')).toHaveLength(7);
+  });
+
+  it('サークル通し番号の印刷で No. 列が付き、2 ページ目は 25 から続く', () => {
+    const { unmount } = render(
+      <PrintListPreview
+        rows={MANY_ROWS}
+        items={PRINT_ITEMS}
+        dayLabelOf={dayLabel}
+        genreNameOf={genreName}
+        printSequenceNumber
+        layout="landscape1"
+        pageNo={2}
+        pageCount={2}
+      />,
+    );
+    expect(screen.getAllByRole('columnheader')[0]).toHaveTextContent('No.');
+    expect(screen.getAllByRole('cell')[0]).toHaveTextContent('25');
+    unmount();
+  });
+
+  it('色の見本は印刷色を使う (12x12 + 1px 枠)', () => {
+    render(
+      <PrintListPreview
+        rows={MANY_ROWS.slice(0, 2)}
+        items={PRINT_ITEMS}
+        dayLabelOf={dayLabel}
+        genreNameOf={genreName}
+        printSequenceNumber={false}
+        layout="portrait"
+        pageNo={1}
+        pageCount={1}
+        checkColors={['#010203', '#040506']}
+      />,
+    );
+    const swatches = screen.getAllByTestId('preview-list-color');
+    expect(swatches).toHaveLength(2);
+    // 色1 → パレット 1 番目、色2 → 2 番目 (印刷色で描く)。
+    expect([swatches[0].dataset.color, swatches[0].style.background]).toEqual(['1', 'rgb(1, 2, 3)']);
+    expect([swatches[1].dataset.color, swatches[1].style.background]).toEqual(['2', 'rgb(4, 5, 6)']);
+    expect([swatches[0].style.width, swatches[0].style.height]).toEqual(['12px', '12px']);
+    expect(swatches[0].style.border).toContain('1px');
+  });
+});
+
+describe('PrintCutPreview (サークルカット印刷のプレビュー)', () => {
+  const cutProps = {
+    rows: MANY_ROWS.slice(0, 7),
+    cutSize: { width: 100, height: 140 },
+    printFrame: false,
+    cellWidth: 90,
+    imageUrlOf: (circle: { id: number }) => `/cuts/${circle.id}.png`,
+  };
+
+  it('カット詰め方向で列数が変わる (横詰め 6 列 / 縦詰め 4 列)', () => {
+    const { unmount } = render(<PrintCutPreview {...cutProps} cutPacking="horizontal" />);
+    const grid = screen.getByTestId('preview-print-cut').firstElementChild as HTMLElement;
+    expect(grid.style.gridTemplateColumns).toBe('repeat(6, 90px)');
+    expect(screen.getAllByTestId('preview-cut-cell')).toHaveLength(7);
+    unmount();
+
+    render(<PrintCutPreview {...cutProps} cutPacking="vertical" />);
+    const verticalGrid = screen.getByTestId('preview-print-cut').firstElementChild as HTMLElement;
+    expect(verticalGrid.style.gridTemplateColumns).toBe('repeat(4, 90px)');
+  });
+
+  it('枠の印刷はセルに枠を付け、色の見本は印刷色を使う', () => {
+    render(<PrintCutPreview {...cutProps} cutPacking="horizontal" printFrame checkColors={['#0a0b0c']} />);
+    const cell = screen.getAllByTestId('preview-cut-cell')[0];
+    expect(cell.style.border).toContain('solid');
+    // 枠なしのときは枠を付けない。
+    cleanup();
+    render(<PrintCutPreview {...cutProps} cutPacking="horizontal" checkColors={['#0a0b0c']} />);
+    expect(screen.getAllByTestId('preview-cut-cell')[0].style.border).toBe('');
+    // 見本は印刷色 (色1 → パレット 1 番目)。
+    expect(screen.getAllByTestId('preview-cut-color')[0].style.background).toBe('rgb(10, 11, 12)');
   });
 });

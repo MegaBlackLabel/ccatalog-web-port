@@ -149,10 +149,12 @@ const BUTTON_ROW_STYLE: CSSProperties = {
   flex: '0 0 auto',
 };
 
-/** 1〜maxPage の整数なら返す。範囲外と数値でない入力は undefined (呼び出し側で無視する)。 */
+/**
+ * 長辺のサイズを解釈する。0 (原寸) 〜9999 の整数なら返し、範囲外と数値でない入力は
+ * undefined (呼び出し側で無視する)。元実装の注意書きは「0, 1〜9999」。
+ */
 function parseLongSide(raw: string): number | undefined {
   const parsed = Number.parseInt(raw, 10);
-  // 元実装の注意書きは「0, 1〜9999」。0 は原寸。
   if (Number.isNaN(parsed) || parsed < 0 || parsed > 9999) return undefined;
   return parsed;
 }
