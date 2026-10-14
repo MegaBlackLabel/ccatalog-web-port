@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { CheckColor, ChecklistEntry } from '../../app/catalog-state';
 import type { Circle, LayoutInfo, MapInfo } from '../../domain/types';
-import { CHECK_COLOR_IDS, checkColorHex, checkSwatchIcon } from '../check-colors';
+import { checkColorHex } from '../check-colors';
 
 /**
  * 印刷プレビューの 1 ページ (ダイアログ 300 のプレビュー面 3011 に出す中身)。
@@ -473,20 +473,3 @@ export function PrintMapPreview({
 }
 
 
-/** 印刷色の見本 (色1〜9)。 */
-export function printColorLegend(colors: readonly string[]): ReactNode {
-  return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      {CHECK_COLOR_IDS.map((color) => (
-        <img
-          key={color}
-          data-testid="preview-color-swatch"
-          src={checkSwatchIcon(colors[color - 1] ?? checkColorHex(color))}
-          alt={`色${color}`}
-          title={`色${color}`}
-          style={{ width: 14, height: 14 }}
-        />
-      ))}
-    </div>
-  );
-}
