@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,7 +9,9 @@ import {
   DEFAULT_IMAGE_PATH_SETTINGS,
   DEFAULT_LIST_DISPLAY_SETTINGS,
   DEFAULT_PAGE_SETUP,
+  LIST_COLUMN_LABELS,
 } from '../../domain/app-settings';
+import type { ListColumnKey } from '../../domain/app-settings';
 import type { GoogleSearchSettings, PageSetup } from '../../domain/app-settings';
 import { GoogleSearchDialog } from './GoogleSearchDialog';
 import type { GoogleSearchDialogProps } from './GoogleSearchDialog';
@@ -95,6 +98,80 @@ function renderListDialog(overrides: Partial<ListDialogProps> = {}) {
   const view = render(<ListDialog {...props} />);
   return { user, props, dialog: view.getByTestId('list-dialog') };
 }
+
+describe('PreferencesDialog — 列の表示項目の並べ替え (1694〜1699)', () => {
+  /** 押した結果が表示に反映されるか見るので、状態を持つラッパで描く。 */
+  function StatefulPreferences() {
+    const [listDisplay, setListDisplay] = useState(DEFAULT_LIST_DISPLAY_SETTINGS);
+    return (
+      <PreferencesDialog
+        settings={DEFAULT_APP_SETTINGS}
+        imagePath={DEFAULT_IMAGE_PATH_SETTINGS}
+        listDisplay={listDisplay}
+        checkColors={DEFAULT_CHECK_COLOR_SETTINGS}
+        onChange={vi.fn()}
+        onImagePathChange={vi.fn()}
+        onListDisplayChange={(patch) => setListDisplay((value) => ({ ...value, ...patch }))}
+        onCheckColorsChange={vi.fn()}
+        onReset={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+  }
+
+  it('行を選んで「前へ移動」すると、一覧の並びがその場で変わる', async () => {
+    const user = userEvent.setup();
+    render(<StatefulPreferences />);
+    const dialog = screen.getByTestId('preferences-dialog');
+    // ライブラリのタブは li[role=tab] の中の a を押すと切り替わる。
+    const listTab = within(dialog).getByRole('tab', { name: 'リスト表示' });
+    await user.click(listTab.querySelector('a') ?? listTab);
+    const box = byControlId(dialog, 1694);
+    const order = () =>
+      [...box.querySelectorAll('[data-testid^="column-row-"]')].map((element) =>
+        (element.getAttribute('data-testid') ?? '').replace('column-row-', ''),
+      );
+
+    const before = order();
+    expect(before.length).toBeGreaterThan(1);
+
+    // 2 番目の行をクリックして選ぶ (チェックの状態は変えない)。
+    await user.click(within(box).getByTestId(`column-row-${before[1]}`));
+    expect(within(dialog).getAllByRole('button', { name: '前へ移動' })[0]).toBeEnabled();
+
+    await user.click(within(dialog).getAllByRole('button', { name: '前へ移動' })[0]);
+    expect(order().slice(0, 2)).toEqual([before[1], before[0]]);
+
+    // 元に戻せる (後へ移動)。
+    await user.click(within(dialog).getAllByRole('button', { name: '後へ移動' })[0]);
+    expect(order().slice(0, 2)).toEqual([before[0], before[1]]);
+  });
+
+  it('チェックを外した列は一覧の後ろへ回る (チェックした列が先)', async () => {
+    const user = userEvent.setup();
+    render(<StatefulPreferences />);
+    const dialog = screen.getByTestId('preferences-dialog');
+    // ライブラリのタブは li[role=tab] の中の a を押すと切り替わる。
+    const listTab = within(dialog).getByRole('tab', { name: 'リスト表示' });
+    await user.click(listTab.querySelector('a') ?? listTab);
+    const box = byControlId(dialog, 1694);
+    const rows = () => [...box.querySelectorAll('[data-testid^="column-row-"]')];
+
+    // 「サークル名」は外せない (5LIST.HTM) ので、外せる 1 件目を選ぶ。
+    const target = rows().find(
+      (row) => (within(row as HTMLElement).getByRole('checkbox') as HTMLInputElement).disabled === false,
+    ) as HTMLElement;
+    const key = (target.getAttribute('data-testid') ?? '').replace('column-row-', '') as ListColumnKey;
+    const before = rows().indexOf(target);
+    expect(before).toBeGreaterThanOrEqual(0);
+
+    await user.click(within(box).getByLabelText(LIST_COLUMN_LABELS[key]));
+
+    // チェックを外した列は一覧の後ろへ回る。
+    expect(rows()[0].getAttribute('data-testid')).not.toBe(`column-row-${key}`);
+    expect(rows()[rows().length - 1].getAttribute('data-testid')).toBe(`column-row-${key}`);
+  });
+});
 
 describe('PreferencesDialog', () => {
   it('ダイアログ 150 のコントロールをすべて表示する', () => {

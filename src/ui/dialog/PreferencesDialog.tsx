@@ -432,6 +432,9 @@ function ColumnList({
 }) {
   const [selected, setSelected] = useState<ListColumnKey | null>(null);
   const index = selected === null ? -1 : visible.indexOf(selected);
+  // 一覧は「表示中の列 (表示順) → チェックの外れた列」の順に描く。
+  // こうしないと、前へ / 後へ移動で visible を並べ替えても表示が変わらない。
+  const ordered = [...visible, ...keys.filter((key) => !visible.includes(key))];
 
   const move = (delta: number) => {
     const target = index + delta;
@@ -444,10 +447,12 @@ function ColumnList({
   return (
     <GroupBox legend={legend} style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
       <div data-ctrl-id={controlId} style={{ ...CHOICE_COLUMN_STYLE, flex: '1 1 auto', overflow: 'auto' }}>
-        {keys.map((key) => (
+        {ordered.map((key) => (
           <div
             key={key}
             data-testid={`column-row-${key}`}
+            // 行のクリックで選ぶ (チェックボックスの入れ外しとは別。実物のリストボックスと同じ)。
+            onClick={() => setSelected(key)}
             style={{ ...ROW_STYLE, background: key === selected ? '#000080' : undefined }}
           >
             <Checkbox
