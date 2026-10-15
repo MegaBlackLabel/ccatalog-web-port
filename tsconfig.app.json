@@ -25,14 +25,7 @@
     "types": [
       "vitest/globals",
       "@testing-library/jest-dom"
-    ],
-    "baseUrl": ".",
-    "paths": {
-      "@megablacklabel/react98retro": [
-        "../../react/react98retro/src/index.ts",
-        "./vendor/react98retro/dist/index.d.ts"
-      ]
-    }
+    ]
   },
   "include": [
     "src"

@@ -38,12 +38,12 @@ const SWATCH_STYLE: CSSProperties = {
 
 /**
  * チェック色の編集 (元実装のダイアログ 149 「チェック色」の中身)。
- * 動作設定の「色の設定」ページと、チェック色の編集ダイアログの両方から使う。
+ * 動作設定の「色の設定」ページと、「チェック色の編集」プロパティシートの両方から使う。
  *
  * - 編集するチェック色 (1702): 標準の設定値 / 現在のチェックリスト
  * - 色の編集 (1020〜1037): 表示色 9 個 + 印刷色 9 個 (押すと色パレット)
  * - チェック色名の編集 (1665 / 1636): 色ごとの名称 (半角 32 文字まで)
- * - デフォルト色に戻す (1038) / Macデフォルト色に戻す (1711)
+ * - 標準の設定に戻す(R) (1038) / Macデフォルト色に戻す(M) (1711)
  */
 export function CheckColorEditor({ checkColors, onChange }: CheckColorEditorProps) {
   const [paletteTarget, setPaletteTarget] = useState<{ kind: 'display' | 'print'; color: number } | null>(
@@ -66,7 +66,7 @@ export function CheckColorEditor({ checkColors, onChange }: CheckColorEditorProp
   return (
     <>
       <div style={ROW_STYLE}>
-        <span>編集するチェック色 :</span>
+        <span>編集するチェック色(S) :</span>
         <Dropdown
           aria-label="編集するチェック色"
           data-ctrl-id={1702}
@@ -81,15 +81,17 @@ export function CheckColorEditor({ checkColors, onChange }: CheckColorEditorProp
           }
         />
       </div>
-      <GroupBox legend="色の編集">
-        <div style={{ ...ROW_STYLE, paddingLeft: 40 }}>
+      <GroupBox legend="色の編集(C)">
+        <div style={ROW_STYLE} data-testid="check-color-labels">
+          {/* 「表示色 :」と同じ幅のスペーサで、見出しを色のボタンの真上に揃える。 */}
+          <span style={{ width: 56 }} />
           {CHECK_COLOR_IDS.map((color) => (
             <span key={color} style={{ width: 30, textAlign: 'center' }}>
               {`色${color}`}
             </span>
           ))}
         </div>
-        <div style={ROW_STYLE}>
+        <div style={ROW_STYLE} data-testid="check-color-display-row">
           <span style={{ width: 56 }}>表示色 :</span>
           {CHECK_COLOR_IDS.map((color) => (
             <Button
@@ -120,7 +122,7 @@ export function CheckColorEditor({ checkColors, onChange }: CheckColorEditorProp
           ))}
         </div>
       </GroupBox>
-      <GroupBox legend="チェック色名の編集">
+      <GroupBox legend="チェック色名の編集(E)">
         <div style={ROW_STYLE}>
           <Dropdown
             aria-label="名称を編集する色"
@@ -130,7 +132,7 @@ export function CheckColorEditor({ checkColors, onChange }: CheckColorEditorProp
             value={String(nameColor)}
             onChange={(event) => setNameColor(Number(event.target.value))}
           />
-          <span>名称 :</span>
+          <span>名称(N) :</span>
           <TextBox
             aria-label="色の名称"
             data-ctrl-id={1636}
@@ -153,7 +155,7 @@ export function CheckColorEditor({ checkColors, onChange }: CheckColorEditorProp
           style={TEXT_BUTTON_STYLE}
           onClick={() => onChange({ display: [], print: [], names: [] })}
         >
-          デフォルト色に戻す
+          標準の設定に戻す(R)
         </Button>
         <Button
           data-ctrl-id={1711}
@@ -169,7 +171,7 @@ export function CheckColorEditor({ checkColors, onChange }: CheckColorEditorProp
           }
           onClick={() => onChange({ display: [], print: [], names: [] })}
         >
-          Macデフォルト色に戻す
+          Macデフォルト色に戻す(M)
         </Button>
       </div>
       {paletteTarget === null ? null : (

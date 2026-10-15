@@ -73,14 +73,15 @@ function renderExportResult(overrides: Partial<ExportResultDialogProps> = {}) {
 }
 
 describe('PrintPreviewWindow (ダイアログ 300)', () => {
-  it('ページ番号と総ページ数をステータスバーに出す', () => {
+  it('ページ指定は現在ページを出し、その右に総ページ数を出す', () => {
     const { dialog } = renderPreview({ pageNo: 2, pageCount: 3 });
-    expect(dialog).toHaveTextContent('2 / 3');
+    expect(within(dialog).getByTestId('preview-page-select')).toHaveValue('2');
+    expect(within(dialog).getByTestId('preview-page-count')).toHaveTextContent('/ 3');
   });
 
   it('元のコントロール ID を保つ (3011〜3020)', () => {
     const { dialog } = renderPreview();
-    for (const controlId of [3011, 3012, 3013, 3014, 3015, 3016, 3017, 3018, 3019, 3020]) {
+    for (const controlId of [3011, 3012, 3013, 3014, 3015, 3016, 3017, 3018, 3019, 3020, 3023]) {
       expect(
         dialog.querySelector(`[data-ctrl-id="${controlId}"]`),
         String(controlId),
@@ -90,85 +91,107 @@ describe('PrintPreviewWindow (ダイアログ 300)', () => {
 
   it('前頁 / 次頁 で前後のページを要求する', async () => {
     const { user, props } = renderPreview({ pageNo: 2, pageCount: 3 });
-    await user.click(screen.getByRole('button', { name: '前頁' }));
+    await user.click(screen.getByRole('button', { name: '前頁(P)' }));
     expect(props.onPageChange).toHaveBeenCalledWith(1);
-    await user.click(screen.getByRole('button', { name: '次頁' }));
+    await user.click(screen.getByRole('button', { name: '次頁(N)' }));
     expect(props.onPageChange).toHaveBeenCalledWith(3);
   });
 
   it('先頭ページでは前頁が無効になる', () => {
     renderPreview({ pageNo: 1, pageCount: 3 });
-    expect(screen.getByRole('button', { name: '前頁' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '次頁' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '前頁(P)' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '次頁(N)' })).toBeEnabled();
   });
 
   it('最終ページでは次頁が無効になる', () => {
     renderPreview({ pageNo: 3, pageCount: 3 });
-    expect(screen.getByRole('button', { name: '前頁' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '次頁' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '前頁(P)' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '次頁(N)' })).toBeDisabled();
   });
 
-  it('表示倍率は 1/4 倍〜4 倍の 5 段を 1 段ずつ送る (幅 / 高さ / 元のサイズは等倍)', async () => {
+  it('表示倍率は ×1/4 〜 ×4 の 5 段で、押した倍率をそのまま要求する', async () => {
     const { user, props } = renderPreview({ zoom: 1 });
 
-    await user.click(screen.getByRole('button', { name: 'ズームイン' }));
+    await user.click(screen.getByRole('button', { name: '×2' }));
     expect(props.onZoomChange).toHaveBeenLastCalledWith(2);
-    await user.click(screen.getByRole('button', { name: 'ズームアウト' }));
-    expect(props.onZoomChange).toHaveBeenLastCalledWith(0.5);
 
-    for (const label of ['幅に合わせる', '高さに合わせる', '元のサイズ']) {
-      await user.click(screen.getByRole('button', { name: label }));
-      expect(props.onZoomChange).toHaveBeenLastCalledWith(1);
-    }
+    await user.click(screen.getByRole('button', { name: '×1/4' }));
+    expect(props.onZoomChange).toHaveBeenLastCalledWith(0.25);
+
+    await user.click(screen.getByRole('button', { name: '×4' }));
+    expect(props.onZoomChange).toHaveBeenLastCalledWith(4);
   });
 
-  it('ボタン列はプレビュー面の上にあり、CHM 4PRINT/5PREVIEW.HTM の並びで出る (倍率 / 前頁 / ページ指定 / 次頁 / 閉じる)', () => {
+  it('今の倍率のボタンだけが押された状態になる', () => {
+    renderPreview({ zoom: 2 });
+
+    expect(screen.getByRole('button', { name: '×2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '×1' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('ボタン列は実物のツールバーと同じ並びで出る (倍率 / 前頁 / ページ指定 / 次頁 / 閉じる)', () => {
     renderPreview();
 
     const row = screen.getByTestId('preview-button-row');
-    // 実物ツールバーと同じくアイコン ボタン (16x16 の SVG) で、名前は aria-label が持つ。
     expect([...row.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual([
-      'ズームアウト',
-      'ズームイン',
-      '幅に合わせる',
-      '高さに合わせる',
-      '元のサイズ',
-      '前頁',
-      '次頁',
-      '閉じる',
+      '×1/4',
+      '×1/2',
+      '×1',
+      '×2',
+      '×4',
+      '前頁(P)',
+      '次頁(N)',
+      '閉じる(X)',
     ]);
-    // 倍率とページ送りはアイコン (実物ツールバーの SVG)、閉じるだけ文字。
-    for (const button of row.querySelectorAll('button')) {
-      const icon = button.querySelector('img');
-      if (button.getAttribute('aria-label') === '閉じる') expect(icon).toBeNull();
-      else expect(icon?.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
-    }
+    // 実物ツールバーと同じく、倍率 / 前頁 / 次頁 / 閉じるはアイコン (16x16 の SVG) を持つ。
+    const icons = [...row.querySelectorAll('img')].map((img) => img.getAttribute('src'));
+    expect(icons).toHaveLength(8);
+    for (const src of icons) expect(src).toMatch(/^data:image\/svg\+xml/);
+    // ページ指定はコンボ (選択の値は「現在ページ : 総ページ数」)。
+    expect(within(row).getByTestId('preview-page-select')).toHaveValue('2');
+    expect(within(row).getByTestId('preview-page-count')).toHaveTextContent('/ 3');
     // 元実装のプレビューに印刷ボタンは無い。
     expect(within(row).queryByRole('button', { name: '印刷' })).toBeNull();
-    // ボタン列はプレビュー面・ステータスバーより上にある。
+    // ボタン列はプレビュー面より上にある。
     const area = screen.getByTestId('preview-area');
     expect(row.compareDocumentPosition(area) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const input = screen.getByTestId('preview-page-input');
-    expect(input.closest('[data-ctrl-id="3011"]')).toBeNull();
+    const select = screen.getByTestId('preview-page-select');
+    expect(select.closest('[data-ctrl-id="3011"]')).toBeNull();
   });
 
-  it('ページ指定ボックスは Enter でそのページを要求する (範囲外は丸める)', async () => {
+  it('ページ指定のセレクトでそのページを要求する', async () => {
     const { user, props } = renderPreview({ pageNo: 2, pageCount: 5 });
-    const input = screen.getByTestId('preview-page-input');
 
-    await user.clear(input);
-    await user.type(input, '4{Enter}');
+    await user.selectOptions(screen.getByTestId('preview-page-select'), '4');
+
     expect(props.onPageChange).toHaveBeenLastCalledWith(4);
-
-    await user.clear(input);
-    await user.type(input, '9{Enter}');
-    expect(props.onPageChange).toHaveBeenLastCalledWith(5);
   });
 
   it('閉じるで onClose を呼ぶ', async () => {
     const { user, props } = renderPreview();
-    await user.click(screen.getByRole('button', { name: '閉じる' }));
+    await user.click(screen.getByRole('button', { name: '閉じる(X)' }));
     expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('チェック色の凡例はウィンドウの下に置き、5 列で色と名前を出す', () => {
+    const { dialog } = renderPreview({
+      checkColors: ['#ff944a', '#ff00ff', '#fff700'],
+      checkColorNames: ['', 'オレンジ', ''],
+    });
+
+    const legend = within(dialog).getByTestId('preview-check-colors');
+    // プレビュー面より後ろ (ウィンドウの下) に置く。
+    const area = within(dialog).getByTestId('preview-area');
+    expect(area.compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 色 3 個ぶんを並べ、名前が無い色は「(名称未登録)」。
+    expect(legend.children).toHaveLength(3);
+    expect(legend).toHaveTextContent('(名称未登録)');
+    expect(legend).toHaveTextContent('オレンジ');
+  });
+
+  it('チェック色を渡さなければ凡例を出さない', () => {
+    renderPreview();
+    expect(screen.queryByTestId('preview-check-colors')).toBeNull();
   });
 
   it('プレビュー画像の src に imageUrl を使う', () => {

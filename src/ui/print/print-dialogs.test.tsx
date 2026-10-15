@@ -199,6 +199,7 @@ function renderPrint(overrides: Partial<PrintDialogProps> = {}) {
   const props: PrintDialogProps = {
     documentName: 'サークルリスト (1日目 東1)',
     onPrint: vi.fn(),
+    onPageSetup: vi.fn(),
     onClose: vi.fn(),
     ...overrides,
   };
@@ -317,6 +318,13 @@ describe('PrintListDialog', () => {
     expect(props.onPreview).toHaveBeenCalledTimes(1);
     expect(props.onPreview).toHaveBeenCalledWith(LIST_SETTINGS);
     expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('プレビュー ボタンは実物の 93x21 (UI-SPEC ダイアログ 163)', () => {
+    const { dialog } = renderList();
+    const preview = dialog.querySelector('[data-testid="print-list-preview"]') as HTMLElement;
+    expect(preview.style.width).toBe('93px');
+    expect(preview.style.height).toBe('21px');
   });
 
   it('閉じるは onClose を呼び、設定は変えない', async () => {
@@ -669,6 +677,13 @@ describe('PrintCutDialog', () => {
     expect(props.onPreview).toHaveBeenCalledWith(CUT_SETTINGS);
   });
 
+  it('プレビュー ボタンは実物の 93x21 (UI-SPEC ダイアログ 164)', () => {
+    const { dialog } = renderCut();
+    const preview = dialog.querySelector('[data-testid="print-cut-preview"]') as HTMLElement;
+    expect(preview.style.width).toBe('93px');
+    expect(preview.style.height).toBe('21px');
+  });
+
   it('閉じるは onClose を呼ぶ', async () => {
     const { user, props, dialog } = renderCut();
 
@@ -779,10 +794,10 @@ describe('PrintMapDialog', () => {
     // 「略図を地図表示に合わせて回転」は 1 段インデント (実測 +18px)。
     const rotate = dialog.querySelector('[data-ctrl-id="1457"]') as HTMLElement;
     expect(rotate.style.marginLeft).toBe('18px');
-    // プレビュー ボタンは実測 97x30 で、本文の下端に置く。
+    // プレビュー ボタンは実物の 93x21 (UI-SPEC ダイアログ 165) で、本文の下端に置く。
     const preview = dialog.querySelector('[data-testid="print-map-preview"]') as HTMLElement;
-    expect(preview.style.width).toBe('97px');
-    expect(preview.style.height).toBe('30px');
+    expect(preview.style.width).toBe('93px');
+    expect(preview.style.height).toBe('21px');
     expect((preview.parentElement as HTMLElement).style.marginTop).toBe('auto');
     expect((preview.closest('div[style*="min-height"]') as HTMLElement)?.style.minHeight ?? '100%').toBe('100%');
   });
@@ -1188,6 +1203,16 @@ describe('PrintDialog', () => {
     await user.click(within(dialog).getByTestId('print-submit'));
 
     expect(props.onPrint).toHaveBeenCalledWith(PRINTERS[1]);
+  });
+
+  it('用紙・余白の変更は onPageSetup を呼ぶ (元リソース 1656)', async () => {
+    const { user, props, dialog } = renderPrint();
+
+    await user.click(within(dialog).getByTestId('print-page-setup'));
+
+    expect(props.onPageSetup).toHaveBeenCalledTimes(1);
+    expect(props.onPrint).not.toHaveBeenCalled();
+    expect(props.onClose).not.toHaveBeenCalled();
   });
 
   it('キャンセルは onClose を呼び、印刷はしない', async () => {

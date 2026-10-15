@@ -88,6 +88,7 @@ export function printRowValues(
 export function PrintListPreview({
   rows,
   items,
+  title = '',
   dayLabelOf,
   genreNameOf,
   printSequenceNumber,
@@ -101,6 +102,8 @@ export function PrintListPreview({
   rows: readonly { circle: Circle; color: CheckColor }[];
   /** 印刷項目 (1144)。 */
   items: readonly string[];
+  /** 用紙の見出し (例: 'コミックマーケット96 1日目 （金）')。 */
+  title?: string;
   dayLabelOf: (circle: Circle) => string;
   genreNameOf: (circle: Circle) => string;
   /** サークル通し番号の印刷 (1148)。 */
@@ -109,25 +112,37 @@ export function PrintListPreview({
   pageNo: number;
   pageCount: number;
 }): ReactNode {
-  // 用紙 1 枚の見た目。レイアウト (1145) の縦横で紙の向きを変える。
+  // 実物は用紙の見本ではなく、ウインドウいっぱいに表を広げる。
+  // レイアウト (1145) の縦横で 1 ページの件数が変わる。
   const landscape = layout.startsWith('landscape');
   const perPage = landscape ? 24 : 18;
   const start = (pageNo - 1) * perPage;
   const pageRows = rows.slice(start, start + perPage);
+  // 足りない行も罫線で埋める (実物は空行にも枠がある)。
+  const blanks = Math.max(0, perPage - pageRows.length);
 
   return (
     <div
       data-testid="preview-print-list"
       style={{
         ...PAGE_STYLE,
-        // ウインドウ幅に合わせる (はみ出させない)。
+        // 実物はウインドウいっぱい。`margin: 0 auto` が残ると交差軸の stretch が効かない。
+        margin: 0,
         width: '100%',
-        maxWidth: landscape ? 900 : 680,
-        minHeight: 460,
-        padding: 12,
+        maxWidth: 'none',
+        minHeight: 0,
+        padding: 0,
+        flex: '1 1 auto',
+        display: 'flex',
+        flexDirection: 'column',
         fontSize: 10,
       }}
     >
+      {title === '' ? null : (
+        <div data-testid="preview-list-title" style={LIST_TITLE_STYLE}>
+          {title}
+        </div>
+      )}
       <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
         <thead>
           <tr>
@@ -171,6 +186,16 @@ export function PrintListPreview({
               </tr>
             );
           })}
+          {/* 実物と同じく、足りない行も罫線で埋める。 */}
+          {Array.from({ length: blanks }, (_, index) => (
+            <tr key={`blank-${index}`}>
+              {printSequenceNumber ? <td style={CELL_STYLE} /> : null}
+              <td style={CELL_STYLE} />
+              {items.map((item) => (
+                <td key={item} style={CELL_STYLE} />
+              ))}
+            </tr>
+          ))}
         </tbody>
       </table>
       <div style={{ marginTop: 6, textAlign: 'right' }}>
@@ -180,15 +205,26 @@ export function PrintListPreview({
   );
 }
 
-const HEADER_CELL_STYLE: CSSProperties = {
-  border: '1px solid #808080',
-  background: '#dfdfdf',
-  padding: '1px 3px',
+/** リストの見出し (実施回と日付)。 */
+const LIST_TITLE_STYLE: CSSProperties = {
+  fontSize: 18,
+  padding: '2px 4px',
   whiteSpace: 'nowrap',
 };
 
+const HEADER_CELL_STYLE: CSSProperties = {
+  // 実物のヘッダーは本文と同じ白地で、黒い枠だけ。98.css の `table > thead > tr > *` は
+  // 銀色 + 3D の陰を当てるので、ここで打ち消す。
+  background: '#ffffff',
+  boxShadow: 'none',
+  border: '1px solid #000000',
+  padding: '1px 3px',
+  whiteSpace: 'nowrap',
+  textAlign: 'left',
+};
+
 const CELL_STYLE: CSSProperties = {
-  border: '1px solid #d4d0c8',
+  border: '1px solid #000000',
   padding: '1px 3px',
   whiteSpace: 'nowrap',
   overflow: 'hidden',

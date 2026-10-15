@@ -174,6 +174,9 @@ const COMMAND_JUMP_INDEX = 34300;
 /** `ComiketDate.weekday` の表記 (実物 DB は 1=日 … 7=土)。元実装のコンボは「金曜日」を出す。 */
 const WEEKDAY_NAMES = ['', '日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'] as const;
 
+/** 同じ曜日の略称 (印刷プレビューの見出し「1日目 （金）」に使う)。 */
+const WEEKDAY_SHORT = ['', '日', '月', '火', '水', '木', '金', '土'] as const;
+
 /** 起動シーケンス (元実装: 起動確認 → シリアル番号 → 情報送信)。 */
 type StartupStep = 'confirm' | 'serial' | 'sendInfo' | 'done';
 
@@ -1429,11 +1432,23 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     .join(' / ');
 
   // プレビュー面に出す 1 ページ (印刷形式ごと)。画像ではなく実データで組む。
+  // サークルリスト印刷の見出しは、実物と同じ「コミックマーケット96 1日目 （金）」。
+  const previewListTitle =
+    preview.print?.kind !== 'list' || preview.print.rows.length === 0
+      ? ''
+      : (() => {
+          const circle = preview.print.rows[0].circle;
+          const date = (catalog?.dates ?? []).find((entry) => entry.id === circle.day);
+          const weekday = date === undefined ? '' : `（${WEEKDAY_SHORT[date.weekday]}）`;
+          return `${catalog?.info.comiketName ?? ''} ${circle.day}日目 ${weekday}`.trim();
+        })();
+
   const previewContent: ReactNode =
     preview.print === undefined ? undefined : preview.print.kind === 'list' ? (
       <PrintListPreview
         rows={orderPrintRows(preview.print.rows, printListSettings.pageBreakOrder)}
         items={printListSettings.items}
+        title={previewListTitle}
         dayLabelOf={dayLabelOf}
         genreNameOf={(circle) => genreNames[circle.genreId] ?? ''}
         printSequenceNumber={printListSettings.printSequenceNumber}
@@ -1748,24 +1763,32 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
       )}
 
       {dialog === 'printSettings' && (
+        <PrintSettingsDialog
+          initialTab={printTab}
+          listSettings={printListSettings}
+          cutSettings={printCutSettings}
+          mapSettings={printMapSettings}
+          onListChange={(patch) => setPrintListSettings((value) => ({ ...value, ...patch }))}
+          onCutChange={(patch) => setPrintCutSettings((value) => ({ ...value, ...patch }))}
+          onMapChange={(patch) => setPrintMapSettings((value) => ({ ...value, ...patch }))}
+          onPreview={openPrintPreview}
+          onClose={() => setDialog(null)}
+        />
+      )}
+
+      {dialog === 'printDialog' && (
         <>
-          <PrintSettingsDialog
-            initialTab={printTab}
-            listSettings={printListSettings}
-            cutSettings={printCutSettings}
-            mapSettings={printMapSettings}
-            onListChange={(patch) => setPrintListSettings((value) => ({ ...value, ...patch }))}
-            onCutChange={(patch) => setPrintCutSettings((value) => ({ ...value, ...patch }))}
-            onMapChange={(patch) => setPrintMapSettings((value) => ({ ...value, ...patch }))}
-            onPreview={openPrintPreview}
-            onPageSetup={() => setPageSetupOpen(true)}
-            onPrint={() => setDialog('printProgress')}
-            onClose={() => {
-              setPageSetupOpen(false);
-              setDialog(null);
+          <PrintDialog
+            documentName={windowTitle}
+            onPrint={(printer) => {
+              setMessage(`${printer} へ印刷します`);
+              setPrintTab('list');
+              setDialog('printSettings');
             }}
+            // 実物と同じく、用紙・余白の設定 (203) は印刷ダイアログから開く。
+            onPageSetup={() => setPageSetupOpen(true)}
+            onClose={() => setDialog(null)}
           />
-          {/* 用紙サイズ・余白の設定は印刷詳細設定の上に出す。 */}
           {pageSetupOpen && (
             <div style={DIALOG_LIFT_STYLE}>
               <PageSetupDialog
@@ -1778,18 +1801,6 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         </>
       )}
 
-      {dialog === 'printDialog' && (
-        <PrintDialog
-          documentName={windowTitle}
-          onPrint={(printer) => {
-            setMessage(`${printer} へ印刷します`);
-            setPrintTab('list');
-            setDialog('printSettings');
-          }}
-          onClose={() => setDialog(null)}
-        />
-      )}
-
       {previewOpen && (
         <div style={DIALOG_LIFT_STYLE}>
         <PrintPreviewWindow
@@ -1800,7 +1811,9 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
           content={previewContent}
           zoom={preview.zoom}
           pageSetup={state.pageSetup}
-          checkColors={printCheckColors}
+          checkColors={preview.print?.kind === 'blankMap' ? undefined : printCheckColors}
+          checkColorNames={checkColorNames}
+          fillContent={preview.print?.kind === 'list'}
           onZoomChange={(value) => setPreview((current) => ({ ...current, zoom: value }))}
           onPageChange={(page) =>
             setPreview((current) => ({

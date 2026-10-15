@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   Button,
   Dropdown,
@@ -12,6 +12,7 @@ import {
   ToolbarRow,
   Window,
   useToolbarRows,
+  useToolbarReorder,
 } from '@megablacklabel/react98retro';
 import type { ToolbarItemDef } from '@megablacklabel/react98retro';
 import { TOOLBAR_ICONS } from './toolbar-icons';
@@ -601,6 +602,41 @@ export function MainWindow({
     paddingX: TOOLBAR_PADDING_X,
   });
 
+  // ツールバーの並べ替え。順序はグループ id で持つので、表示 > ツールバー で
+  // 出し入れしても保たれる (隠れているものは末尾に残す)。
+  const [groupOrder, setGroupOrder] = useState<string[]>(() => TOOLBAR_BARS.map((bar) => bar.id));
+  const shownBarIds = new Set<string>(shownBars);
+  const orderedGroups = groupOrder
+    .filter((id) => shownBarIds.has(id))
+    .map((id) => shownGroups.find((group) => group.id === id))
+    .filter((group): group is (typeof shownGroups)[number] => group !== undefined);
+
+  // 掴めるかどうか。固定したいグループはここで false にする (実物の rebar と同じく、
+  // 固定したグループはグリップを描かないので掴めない)。
+  const movableGroups = orderedGroups.map(() => true);
+
+  const handleReorder = useCallback(
+    (from: number, to: number) => {
+      setGroupOrder((prev) => {
+        const visible = prev.filter((id) => shownBarIds.has(id));
+        const next = [...visible];
+        const [moved] = next.splice(from, 1);
+        next.splice(to, 0, moved);
+        const hidden = prev.filter((id) => !shownBarIds.has(id));
+        return [...next, ...hidden];
+      });
+    },
+    [shownBarIds],
+  );
+
+  const { draggingIndex, dropIndex, getHandleProps, canReorder } = useToolbarReorder({
+    count: orderedGroups.length,
+    movable: movableGroups,
+    allowCrossRow: true,
+    itemRefs: groupRefs,
+    onReorder: handleReorder,
+  });
+
   // ステータスバーのページ送りスライダの範囲。総ページ数が来ていなければ現在ページまで。
   const pageCount = Math.max(lastPage ?? pageNo, pageNo, 1);
 
@@ -684,18 +720,29 @@ export function MainWindow({
           data-testid="main-toolbar"
           rows={toolbarRows.map((row) => (
             <ToolbarRow key={row[0]} data-testid="toolbar-row" style={TOOLBAR_ROW_LOCAL}>
-              {row.map((groupIndex) => {
-                const group = shownGroups[groupIndex];
+              {row.map((position) => {
+                const group = orderedGroups[position];
                 return (
                   <div
                     key={group.id}
                     data-testid={`toolbar-group-${group.id}`}
+                    data-reorder-dragging={draggingIndex === position ? '' : undefined}
+                    data-reorder-drop={
+                      dropIndex === position && draggingIndex !== position ? '' : undefined
+                    }
                     ref={(element) => {
-                      groupRefs.current[groupIndex] = element;
+                      // 計測は「並び順の位置」で見るので、ref も位置で持つ
+                      groupRefs.current[position] = element;
                     }}
                     style={TOOLBAR_GROUP_STYLE}
                   >
-                    <Toolbar items={group.items} aria-label={group.label} style={TOOLBAR_INLINE_STYLE} />
+                    <Toolbar
+                      items={group.items}
+                      aria-label={group.label}
+                      style={TOOLBAR_INLINE_STYLE}
+                      grip={movableGroups[position]}
+                      gripProps={canReorder(position) ? getHandleProps(position) : undefined}
+                    />
                     {group.extra}
                   </div>
                 );

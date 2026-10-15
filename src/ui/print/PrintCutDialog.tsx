@@ -608,8 +608,8 @@ export function PrintCutPage({ settings, onChange, onPreview }: PrintCutPageProp
           variant="default"
           data-testid="print-cut-preview"
           data-ctrl-id={1247}
-          // 実物の実測 97x30。
-          style={{ width: 97, height: 30 }}
+          // 実物の 93x21 (UI-SPEC ダイアログ 164)。
+          style={{ width: 93, height: 21 }}
           onClick={onPreview}
         >
           プレビュー

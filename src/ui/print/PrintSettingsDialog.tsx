@@ -34,10 +34,6 @@ export type PrintSettingsDialogProps = {
   onMapChange: (patch: Partial<PrintMapSettings>) => void;
   /** 表示中のタブのプレビュー。 */
   onPreview: (tab: PrintSettingsTabId) => void;
-  /** 用紙サイズ・余白の設定 (元実装のダイアログ 203)。 */
-  onPageSetup: () => void;
-  /** 印刷 (プリンタ選択から来た流れ。元実装は印刷ダイアログで実行する)。 */
-  onPrint: () => void;
   onClose: () => void;
   initialX?: number;
   initialY?: number;
@@ -63,9 +59,11 @@ const BUTTON_ROW_STYLE: CSSProperties = {
   flex: '0 0 auto',
 };
 
-const TEXT_BUTTON_STYLE: CSSProperties = {
-  flex: '0 0 auto',
-  whiteSpace: 'nowrap',
+/** 確定待ちの編集 (キーごとの patch)。「適用」の有効 / 無効と確定時の通知に使う。 */
+type PendingEdits = {
+  list?: Partial<PrintListSettings>;
+  cut?: Partial<PrintCutSettings>;
+  map?: Partial<PrintMapSettings>;
 };
 
 export function PrintSettingsDialog({
@@ -77,8 +75,6 @@ export function PrintSettingsDialog({
   onCutChange,
   onMapChange,
   onPreview,
-  onPageSetup,
-  onPrint,
   onClose,
   initialX = 240,
   initialY = 30,
@@ -90,21 +86,48 @@ export function PrintSettingsDialog({
   zIndex,
 }: PrintSettingsDialogProps) {
   const [tab, setTab] = useState<PrintSettingsTabId>(initialTab);
+  /** 編集中の値 (OK / 適用(A) で親へ出すまで確定しない)。 */
+  const [draft, setDraft] = useState({ list: listSettings, cut: cutSettings, map: mapSettings });
+  /** まだ確定していない編集 (「適用」の有効 / 無効と、確定時に渡す patch)。 */
+  const [pending, setPending] = useState<PendingEdits>({});
+  const dirty = Object.values(pending).some((patch) => patch !== undefined);
+
+  const editList = (patch: Partial<PrintListSettings>) => {
+    setDraft((prev) => ({ ...prev, list: { ...prev.list, ...patch } }));
+    setPending((prev) => ({ ...prev, list: { ...prev.list, ...patch } }));
+  };
+
+  const editCut = (patch: Partial<PrintCutSettings>) => {
+    setDraft((prev) => ({ ...prev, cut: { ...prev.cut, ...patch } }));
+    setPending((prev) => ({ ...prev, cut: { ...prev.cut, ...patch } }));
+  };
+
+  const editMap = (patch: Partial<PrintMapSettings>) => {
+    setDraft((prev) => ({ ...prev, map: { ...prev.map, ...patch } }));
+    setPending((prev) => ({ ...prev, map: { ...prev.map, ...patch } }));
+  };
+
+  /** 溜めた編集を親へ出す (OK / 適用(A))。 */
+  const commit = () => {
+    if (pending.list) onListChange(pending.list);
+    if (pending.cut) onCutChange(pending.cut);
+    if (pending.map) onMapChange(pending.map);
+  };
 
   const pages: Record<PrintSettingsTabId, React.ReactNode> = {
-    list: <PrintListPage settings={listSettings} onChange={onListChange} onPreview={() => onPreview('list')} />,
-    cut: <PrintCutPage settings={cutSettings} onChange={onCutChange} onPreview={() => onPreview('cut')} />,
+    list: <PrintListPage settings={draft.list} onChange={editList} onPreview={() => onPreview('list')} />,
+    cut: <PrintCutPage settings={draft.cut} onChange={editCut} onPreview={() => onPreview('cut')} />,
     map: (
       <PrintMapPage
-        settings={{ ...mapSettings, blank: false }}
-        onChange={onMapChange}
+        settings={{ ...draft.map, blank: false }}
+        onChange={editMap}
         onPreview={() => onPreview('map')}
       />
     ),
     blankMap: (
       <PrintMapPage
-        settings={{ ...mapSettings, blank: true }}
-        onChange={onMapChange}
+        settings={{ ...draft.map, blank: true }}
+        onChange={editMap}
         onPreview={() => onPreview('blankMap')}
       />
     ),
@@ -136,14 +159,29 @@ export function PrintSettingsDialog({
           panelClassName="print-settings-page"
         />
         <div style={BUTTON_ROW_STYLE}>
-          <Button data-ctrl-id={203} data-testid="print-settings-page-setup" style={TEXT_BUTTON_STYLE} onClick={onPageSetup}>
-            用紙サイズ・余白...
+          <Button
+            variant="default"
+            data-testid="print-settings-ok"
+            onClick={() => {
+              commit();
+              setPending({});
+              onClose();
+            }}
+          >
+            OK
           </Button>
-          <Button variant="default" data-testid="print-settings-print" style={TEXT_BUTTON_STYLE} onClick={onPrint}>
-            印刷
+          <Button data-testid="print-settings-cancel" onClick={onClose}>
+            キャンセル
           </Button>
-          <Button data-testid="print-settings-close" style={TEXT_BUTTON_STYLE} onClick={onClose}>
-            閉じる
+          <Button
+            data-testid="print-settings-apply"
+            disabled={!dirty}
+            onClick={() => {
+              commit();
+              setPending({});
+            }}
+          >
+            適用(A)
           </Button>
         </div>
       </div>

@@ -7,7 +7,7 @@ import type {
   ListColumnKey,
   ListDisplaySettings,
 } from '../../domain/app-settings';
-import { DEFAULT_LIST_DISPLAY_SETTINGS, LIST_COLUMN_LABELS } from '../../domain/app-settings';
+import { DEFAULT_APP_SETTINGS, DEFAULT_LIST_DISPLAY_SETTINGS, LIST_COLUMN_LABELS } from '../../domain/app-settings';
 import { CheckColorEditor } from '../checklist/CheckColorEditor';
 
 export type PreferencesDialogProps = {
@@ -43,12 +43,20 @@ export type PreferencesDialogProps = {
  */
 const TABS = [
   { id: 'option', label: '動作オプション' },
-  { id: 'imagePath', label: '画像データパス' },
+  { id: 'imagePath', label: 'パス設定' },
   { id: 'list', label: 'リスト表示' },
-  { id: 'colors', label: '色の設定' },
+  { id: 'colors', label: 'チェック色' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
+
+/** 確定待ちの編集 (キーごとの patch)。「適用」の有効 / 無効と確定時の通知に使う。 */
+type PendingEdits = {
+  settings?: Partial<AppSettings>;
+  imagePath?: Partial<ImagePathSettings>;
+  listDisplay?: Partial<ListDisplaySettings>;
+  checkColors?: Partial<CheckColorSettings>;
+};
 
 const BODY_STYLE: CSSProperties = {
   display: 'flex',
@@ -84,6 +92,13 @@ const BUTTON_ROW_STYLE: CSSProperties = {
   justifyContent: 'flex-end',
   gap: 6,
   flex: '0 0 auto',
+};
+
+/** プロパティシート下部のボタン行 (実物は右端揃えの OK / キャンセル / 適用(A))。 */
+const DIALOG_BUTTON_ROW_STYLE: CSSProperties = {
+  ...BUTTON_ROW_STYLE,
+  justifyContent: 'flex-end',
+  padding: '0 6px 6px',
 };
 
 /** 文字ボタン。狭い行に置いても文字が折り返さないようにする (高さは 98.css のまま)。 */
@@ -517,12 +532,52 @@ export function PreferencesDialog({
   zIndex,
 }: PreferencesDialogProps) {
   const [tab, setTab] = useState<TabId>('option');
+  /** 編集中の値 (OK / 適用(A) で親へ出すまで確定しない)。 */
+  const [draft, setDraft] = useState({ settings, imagePath, listDisplay, checkColors });
+  /** まだ確定していない編集 (「適用」の有効 / 無効と、確定時に渡す patch)。 */
+  const [pending, setPending] = useState<PendingEdits>({});
+  const dirty = Object.values(pending).some((patch) => patch !== undefined);
+
+  const editSettings = (patch: Partial<AppSettings>) => {
+    setDraft((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
+    setPending((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
+  };
+
+  const editImagePath = (patch: Partial<ImagePathSettings>) => {
+    setDraft((prev) => ({ ...prev, imagePath: { ...prev.imagePath, ...patch } }));
+    setPending((prev) => ({ ...prev, imagePath: { ...prev.imagePath, ...patch } }));
+  };
+
+  const editListDisplay = (patch: Partial<ListDisplaySettings>) => {
+    setDraft((prev) => ({ ...prev, listDisplay: { ...prev.listDisplay, ...patch } }));
+    setPending((prev) => ({ ...prev, listDisplay: { ...prev.listDisplay, ...patch } }));
+  };
+
+  const editCheckColors = (patch: Partial<CheckColorSettings>) => {
+    setDraft((prev) => ({ ...prev, checkColors: { ...prev.checkColors, ...patch } }));
+    setPending((prev) => ({ ...prev, checkColors: { ...prev.checkColors, ...patch } }));
+  };
+
+  /** 溜めた編集を親へ出す (OK / 適用(A))。 */
+  const commit = () => {
+    if (pending.settings) onChange(pending.settings);
+    if (pending.imagePath) onImagePathChange(pending.imagePath);
+    if (pending.listDisplay) onListDisplayChange(pending.listDisplay);
+    if (pending.checkColors) onCheckColorsChange(pending.checkColors);
+  };
+
+  /** 動作オプションの「設定を初期化(D)」 (実物はこのページの中のボタン)。 */
+  const resetOptions = () => {
+    onReset();
+    setDraft((prev) => ({ ...prev, settings: DEFAULT_APP_SETTINGS }));
+    setPending((prev) => ({ ...prev, settings: undefined }));
+  };
 
   const pages: Record<TabId, React.ReactNode> = {
-    option: <OptionPage settings={settings} onChange={onChange} onReset={onReset} />,
-    imagePath: <ImagePathPage imagePath={imagePath} onChange={onImagePathChange} />,
-    list: <ListPage listDisplay={listDisplay} onChange={onListDisplayChange} />,
-    colors: <CheckColorEditor checkColors={checkColors} onChange={onCheckColorsChange} />,
+    option: <OptionPage settings={draft.settings} onChange={editSettings} onReset={resetOptions} />,
+    imagePath: <ImagePathPage imagePath={draft.imagePath} onChange={editImagePath} />,
+    list: <ListPage listDisplay={draft.listDisplay} onChange={editListDisplay} />,
+    colors: <CheckColorEditor checkColors={draft.checkColors} onChange={editCheckColors} />,
   };
 
   return (
@@ -546,9 +601,30 @@ export function PreferencesDialog({
           style={{ flex: '1 1 auto', minHeight: 0 }}
           panelClassName="preferences-page"
         />
-        <div style={{ ...BUTTON_ROW_STYLE, paddingTop: 4 }}>
-          <Button variant="default" data-testid="preferences-close" onClick={onClose}>
-            閉じる
+        <div style={DIALOG_BUTTON_ROW_STYLE} data-testid="preferences-actions">
+          <Button
+            variant="default"
+            data-testid="preferences-ok"
+            onClick={() => {
+              commit();
+              setPending({});
+              onClose();
+            }}
+          >
+            OK
+          </Button>
+          <Button data-testid="preferences-cancel" onClick={onClose}>
+            キャンセル
+          </Button>
+          <Button
+            data-testid="preferences-apply"
+            disabled={!dirty}
+            onClick={() => {
+              commit();
+              setPending({});
+            }}
+          >
+            適用(A)
           </Button>
         </div>
       </div>

@@ -1,2 +1,0 @@
-@megablacklabel/react98retro 0.4.3
-このディレクトリは tools/sync-vendor-lib.mjs が生成する (手で編集しない)。

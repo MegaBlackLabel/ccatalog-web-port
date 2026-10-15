@@ -13,6 +13,8 @@ export type PrintDialogProps = {
   documentName: string;
   /** OK。選んだプリンタ名を渡す。 */
   onPrint: (printer: string) => void;
+  /** 用紙・余白の変更 (元リソース 1656)。 */
+  onPageSetup: () => void;
   /** キャンセル / 閉じる。 */
   onClose: () => void;
   /** ウィンドウの初期位置とサイズ (アプリ側のレイアウトが決める)。 */
@@ -49,6 +51,7 @@ const BUTTON_ROW_STYLE: CSSProperties = {
 export function PrintDialog({
   documentName,
   onPrint,
+  onPageSetup,
   onClose,
   initialX = 300,
   initialY = 200,
@@ -103,6 +106,16 @@ export function PrintDialog({
             <span data-testid="print-document-name">{documentName}</span>
           </div>
         </GroupBox>
+
+        {/* 実物のリソース 1538 は「用紙サイズ:」の右にこのボタンを置く (1656)。 */}
+        <Button
+          data-ctrl-id={1656}
+          data-testid="print-page-setup"
+          style={{ flex: '0 0 auto', alignSelf: 'flex-start' }}
+          onClick={onPageSetup}
+        >
+          用紙・余白の変更(S)...
+        </Button>
 
         <div style={BUTTON_ROW_STYLE}>
           <Button

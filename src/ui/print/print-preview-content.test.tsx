@@ -227,11 +227,35 @@ const dayLabel = () => '1日目';
 const genreName = () => 'ジャンルA';
 
 describe('PrintListPreview (サークルリスト印刷のプレビュー)', () => {
-  it('1 ページ目は横向き 24 件、2 ページ目は続きを出す', () => {
+  it('見出しに実施回と日付を出し、表は全幅・全高で組む', () => {
+    render(
+      <PrintListPreview
+        rows={MANY_ROWS.slice(0, 2)}
+        items={PRINT_ITEMS}
+        title="コミックマーケット96 1日目 （金）"
+        dayLabelOf={dayLabel}
+        genreNameOf={genreName}
+        printSequenceNumber={false}
+        layout="portrait"
+        pageNo={1}
+        pageCount={1}
+      />,
+    );
+    expect(screen.getByTestId('preview-list-title')).toHaveTextContent('コミックマーケット96 1日目 （金）');
+    // ウインドウ幅いっぱいに広げる (用紙の幅で止めない)。
+    const page = screen.getByTestId('preview-print-list');
+    expect(page.style.width).toBe('100%');
+    expect(page.style.maxWidth).toBe('none');
+    expect(page.style.flex).toBe('1 1 auto');
+    expect(page.style.padding).toBe('0px');
+  });
+
+  it('1 ページ目は横向き 24 件、2 ページ目は続きを出し、余りは空行で埋める', () => {
     render(
       <PrintListPreview
         rows={MANY_ROWS}
         items={PRINT_ITEMS}
+        title=""
         dayLabelOf={dayLabel}
         genreNameOf={genreName}
         printSequenceNumber={false}
@@ -248,6 +272,7 @@ describe('PrintListPreview (サークルリスト印刷のプレビュー)', () 
       <PrintListPreview
         rows={MANY_ROWS}
         items={PRINT_ITEMS}
+        title=""
         dayLabelOf={dayLabel}
         genreNameOf={genreName}
         printSequenceNumber={false}
@@ -256,7 +281,8 @@ describe('PrintListPreview (サークルリスト印刷のプレビュー)', () 
         pageCount={2}
       />,
     );
-    expect(screen.getAllByRole('row')).toHaveLength(7);
+    // 実物と同じく、足りない行も罫線で埋める (2 ページ目は 6 件 + 空行 18)。
+    expect(screen.getAllByRole('row')).toHaveLength(25);
   });
 
   it('サークル通し番号の印刷で No. 列が付き、2 ページ目は 25 から続く', () => {
@@ -275,6 +301,27 @@ describe('PrintListPreview (サークルリスト印刷のプレビュー)', () 
     expect(screen.getAllByRole('columnheader')[0]).toHaveTextContent('No.');
     expect(screen.getAllByRole('cell')[0]).toHaveTextContent('25');
     unmount();
+  });
+
+  it('ヘッダーは実物と同じ白地に黒枠 (98.css の銀色を打ち消す)', () => {
+    render(
+      <PrintListPreview
+        rows={MANY_ROWS.slice(0, 1)}
+        items={PRINT_ITEMS}
+        title=""
+        dayLabelOf={dayLabel}
+        genreNameOf={genreName}
+        printSequenceNumber={false}
+        layout="portrait"
+        pageNo={1}
+        pageCount={1}
+      />,
+    );
+    const header = screen.getAllByRole('columnheader')[0] as HTMLElement;
+    expect(header.style.background).toBe('rgb(255, 255, 255)');
+    // 98.css の `table > thead > tr > *` が当てる銀色と 3D の陰を打ち消す。
+    expect(header.style.boxShadow).toBe('none');
+    expect(header.style.border).toContain('1px solid');
   });
 
   it('色の見本は印刷色を使う (12x12 + 1px 枠)', () => {

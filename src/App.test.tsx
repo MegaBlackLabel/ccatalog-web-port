@@ -62,7 +62,7 @@ async function toggleSetting(user: UserEvent, label: string) {
   await chooseMenu(user, 'ファイル(F)', /^動作設定\(C\)\.\.\./);
   const dialog = await screen.findByTestId('preferences-dialog');
   await user.click(within(dialog).getByLabelText(label));
-  await user.click(within(dialog).getByTestId('preferences-close'));
+  await user.click(within(dialog).getByTestId('preferences-ok'));
 }
 
 describe('App — 元アプリの画面が揃っている', () => {
@@ -511,9 +511,29 @@ describe('App — 残りのダイアログをメニューから開ける', () =>
     await user.click(screen.getByTestId('preview-close'));
     expect(screen.queryByTestId('print-preview-window')).not.toBeInTheDocument();
 
-    // 印刷 (元実装は印刷ダイアログで実行する。Web 版はここからダミーの進捗を出す)。
-    await user.click(within(dialog).getByTestId('print-settings-print'));
-    expect(await screen.findByTestId('print-progress-dialog')).toBeInTheDocument();
+    // 下部は実物と同じ OK / キャンセル / 適用(A)。「用紙サイズ・余白」「印刷」はここには無い
+    // (実物では用紙・余白は印刷ダイアログ、印刷はファイル > 印刷から)。
+    expect(within(dialog).getByTestId('print-settings-ok')).toHaveTextContent('OK');
+    expect(within(dialog).getByTestId('print-settings-cancel')).toHaveTextContent('キャンセル');
+    expect(within(dialog).getByTestId('print-settings-apply')).toHaveTextContent('適用(A)');
+    expect(within(dialog).queryByTestId('print-settings-page-setup')).toBeNull();
+    expect(within(dialog).queryByTestId('print-settings-print')).toBeNull();
+    await user.click(within(dialog).getByTestId('print-settings-ok'));
+    expect(screen.queryByTestId('print-settings-dialog')).not.toBeInTheDocument();
+  });
+
+  it('白地図印刷のプレビューにはチェック色の凡例を出さない', async () => {
+    const { user } = await renderApp();
+    await chooseMenu(user, 'ファイル(F)', /^印刷詳細設定/);
+    const dialog = await screen.findByTestId('print-settings-dialog');
+
+    await user.click(within(dialog).getByRole('link', { name: '白地図印刷' }));
+    await user.click(within(dialog).getByRole('button', { name: 'プレビュー' }));
+
+    const preview = await screen.findByTestId('print-preview-window');
+    expect(within(preview).getByTestId('preview-print-map')).toBeInTheDocument();
+    // 白地図はチェック色を使わないので、ウィンドウ下端の凡例は出さない。
+    expect(within(preview).queryByTestId('preview-check-colors')).toBeNull();
   });
 
   it('印刷ダイアログでプリンタを選ぶと設定ダイアログへ進む', async () => {
@@ -831,15 +851,19 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
   it('用紙サイズ・余白 (203) の設定は印刷プレビューに出る', async () => {
     const { user } = await renderApp();
 
-    await chooseMenu(user, 'ファイル(F)', /^印刷詳細設定/);
-    const settings = await screen.findByTestId('print-settings-dialog');
-    await user.click(within(settings).getByTestId('print-settings-page-setup'));
+    // 実物と同じく、用紙・余白は印刷ダイアログ (1538) のボタンから開く。
+    await chooseMenu(user, 'ファイル(F)', /^印刷\(P\)/);
+    const printDialog = await screen.findByTestId('print-dialog');
+    await user.click(within(printDialog).getByTestId('print-page-setup'));
     const setup = await screen.findByTestId('page-setup-dialog');
     const dpi = within(setup).getByLabelText('DPI');
     await user.clear(dpi);
     await user.type(dpi, '600');
     await user.click(within(setup).getByTestId('page-setup-close'));
+    await user.click(within(printDialog).getByTestId('print-cancel'));
 
+    await chooseMenu(user, 'ファイル(F)', /^印刷詳細設定/);
+    const settings = await screen.findByTestId('print-settings-dialog');
     await user.click(within(settings).getByRole('button', { name: 'プレビュー' }));
 
     expect(await screen.findByTestId('preview-page-setup')).toHaveTextContent('600dpi');
@@ -1147,9 +1171,9 @@ describe('App — 動作設定 (プロパティシート)', () => {
 
     expect(within(dialog).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       '動作オプション',
-      '画像データパス',
+      'パス設定',
       'リスト表示',
-      '色の設定',
+      'チェック色',
     ]);
     const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
     expect(root.style.width).toBe('487px');
@@ -1159,14 +1183,14 @@ describe('App — 動作設定 (プロパティシート)', () => {
   it('各ページに元ダイアログの項目が並ぶ', async () => {
     const { user } = await renderApp();
 
-    // ② 画像データパス (元ダイアログ 191)
-    let dialog = await openPage(user, '画像データパス');
+    // ② パス設定 (元ダイアログ 191)
+    let dialog = await openPage(user, 'パス設定');
     expect(within(dialog).getByLabelText('自動検索する')).toBeChecked();
     expect(within(dialog).getByLabelText('指定場所から読み込む')).not.toBeChecked();
     expect(within(dialog).getByLabelText('画像データの場所')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('標準')).toBeChecked();
     expect(within(dialog).getByLabelText('ブラウザの場所')).toBeInTheDocument();
-    await user.click(within(dialog).getByTestId('preferences-close'));
+    await user.click(within(dialog).getByTestId('preferences-ok'));
 
     // ③ リスト表示 (元ダイアログ 210)
     dialog = await openPage(user, 'リスト表示');
@@ -1175,10 +1199,10 @@ describe('App — 動作設定 (プロパティシート)', () => {
     expect(within(dialog).getAllByRole('button', { name: '前へ移動' })).toHaveLength(2);
     expect(within(dialog).getAllByRole('button', { name: '後へ移動' })).toHaveLength(2);
     expect(within(dialog).getByTestId('preferences-list-default')).toBeInTheDocument();
-    await user.click(within(dialog).getByTestId('preferences-close'));
+    await user.click(within(dialog).getByTestId('preferences-ok'));
 
-    // ④ 色の設定 (元ダイアログ 149)
-    dialog = await openPage(user, '色の設定');
+    // ④ チェック色 (元ダイアログ 149)
+    dialog = await openPage(user, 'チェック色');
     expect(within(dialog).getByLabelText('編集するチェック色')).toHaveValue('standard');
     expect(within(dialog).getByTestId('display-color-1')).toBeInTheDocument();
     expect(within(dialog).getByTestId('print-color-9')).toBeInTheDocument();
@@ -1188,14 +1212,14 @@ describe('App — 動作設定 (プロパティシート)', () => {
     expect(within(dialog).getByTestId('preferences-color-mac-reset')).toBeDisabled();
   });
 
-  it('画像データパスで「指定場所から読み込む」にすると、画像の取得元が変わる', async () => {
+  it('パス設定で「指定場所から読み込む」にすると、画像の取得元が変わる', async () => {
     const { user } = await renderApp();
-    const dialog = await openPage(user, '画像データパス');
+    const dialog = await openPage(user, 'パス設定');
 
     await user.click(within(dialog).getByLabelText('指定場所から読み込む'));
     await user.clear(within(dialog).getByLabelText('画像データの場所'));
     await user.type(within(dialog).getByLabelText('画像データの場所'), 'https://cdn.example.com/img');
-    await user.click(within(dialog).getByTestId('preferences-close'));
+    await user.click(within(dialog).getByTestId('preferences-ok'));
 
     await waitFor(() =>
       expect(screen.getByTestId('cut-view').querySelector('img')).toHaveAttribute(
@@ -1212,7 +1236,7 @@ describe('App — 動作設定 (プロパティシート)', () => {
 
     const dialog = await openPage(user, 'リスト表示');
     await user.click(within(dialog).getByLabelText('ジャンル'));
-    await user.click(within(dialog).getByTestId('preferences-close'));
+    await user.click(within(dialog).getByTestId('preferences-ok'));
 
     await waitFor(() =>
       expect(within(checklist).queryByRole('columnheader', { name: 'ジャンル' })).not.toBeInTheDocument(),
@@ -1221,7 +1245,7 @@ describe('App — 動作設定 (プロパティシート)', () => {
     expect(within(checklist).getByRole('columnheader', { name: 'サークル名' })).toBeInTheDocument();
   });
 
-  it('色の設定で表示色を変えると、チェックしたカットの色が変わる', async () => {
+  it('チェック色で表示色を変えると、チェックしたカットの色が変わる', async () => {
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
     await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
@@ -1229,12 +1253,12 @@ describe('App — 動作設定 (プロパティシート)', () => {
     await user.click(within(main).getByRole('button', { name: '色1' }));
     await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
 
-    const dialog = await openPage(user, '色の設定');
+    const dialog = await openPage(user, 'チェック色');
     await user.click(within(dialog).getByTestId('display-color-1'));
     const palette = await screen.findByTestId('color-palette-dialog');
     await user.click(within(palette).getByRole('button', { name: '#ffffff' }));
     await user.click(within(palette).getByTestId('palette-ok'));
-    await user.click(within(dialog).getByTestId('preferences-close'));
+    await user.click(within(dialog).getByTestId('preferences-ok'));
 
     const space = screen
       .getByTestId('cut-view')

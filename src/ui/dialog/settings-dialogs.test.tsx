@@ -205,29 +205,72 @@ describe('PreferencesDialog', () => {
     );
   });
 
-  it('チェックボックスの変更はそのキーだけの patch で onChange を呼ぶ', async () => {
+  it('実物と同じ体裁 (タブ名 / 下部ボタン)', () => {
+    const { dialog } = renderPreferences();
+
+    // 実物のタブは「動作オプション / パス設定 / リスト表示 / チェック色」。
+    expect(within(dialog).getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      '動作オプション',
+      'パス設定',
+      'リスト表示',
+      'チェック色',
+    ]);
+    // 実物の下部は OK / キャンセル / 適用(A) (「閉じる」ではない)。
+    expect(within(dialog).getByTestId('preferences-ok')).toHaveTextContent('OK');
+    expect(within(dialog).getByTestId('preferences-cancel')).toHaveTextContent('キャンセル');
+    expect(within(dialog).getByTestId('preferences-apply')).toHaveTextContent('適用(A)');
+    // 変更が無い間は「適用」を使えない。
+    expect(within(dialog).getByTestId('preferences-apply')).toBeDisabled();
+    // 実物のボタンは右端揃え (中央寄せではない)。
+    expect(within(dialog).getByTestId('preferences-actions')).toHaveStyle({
+      justifyContent: 'flex-end',
+    });
+  });
+
+  it('編集は適用(A)を押すまで onChange に出ない', async () => {
     const { user, props, dialog } = renderPreferences({
       settings: { ...DEFAULT_APP_SETTINGS, enterMovesCursor: false },
     });
 
     await user.click(byControlId(dialog, 1021));
-    expect(props.onChange).toHaveBeenNthCalledWith(1, { enterMovesCursor: true });
+    expect(props.onChange).not.toHaveBeenCalled();
 
-    await user.click(byControlId(dialog, 1712));
-    expect(props.onChange).toHaveBeenNthCalledWith(2, { overwriteMemoOnLoad: true });
-
-    expect(props.onChange).toHaveBeenCalledTimes(2);
-  });
-
-  it('スクロール方式のラジオは scrollMode だけの patch で onChange を呼ぶ', async () => {
-    const { user, props, dialog } = renderPreferences();
-
-    expect(byControlId(dialog, 1023)).toBeChecked();
-
-    await user.click(byControlId(dialog, 1025));
+    await user.click(within(dialog).getByTestId('preferences-apply'));
 
     expect(props.onChange).toHaveBeenCalledTimes(1);
+    expect(props.onChange).toHaveBeenCalledWith({ enterMovesCursor: true });
+  });
+
+  it('適用(A) は複数の編集をまとめて、そのキーだけの patch で出す', async () => {
+    const { user, props, dialog } = renderPreferences();
+
+    await user.click(byControlId(dialog, 1025));
+    await user.click(byControlId(dialog, 1712));
+
+    await user.click(within(dialog).getByTestId('preferences-apply'));
+
+    expect(props.onChange).toHaveBeenCalledTimes(1);
+    expect(props.onChange).toHaveBeenCalledWith({ scrollMode: 'ie', overwriteMemoOnLoad: true });
+  });
+
+  it('OK は編集を出して閉じる', async () => {
+    const { user, props, dialog } = renderPreferences();
+
+    await user.click(byControlId(dialog, 1025));
+    await user.click(within(dialog).getByTestId('preferences-ok'));
+
     expect(props.onChange).toHaveBeenCalledWith({ scrollMode: 'ie' });
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('キャンセルは編集を捨てて閉じる', async () => {
+    const { user, props, dialog } = renderPreferences();
+
+    await user.click(byControlId(dialog, 1025));
+    await user.click(within(dialog).getByTestId('preferences-cancel'));
+
+    expect(props.onChange).not.toHaveBeenCalled();
+    expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
   it('設定を初期化は onReset を呼ぶ', async () => {
@@ -240,11 +283,12 @@ describe('PreferencesDialog', () => {
     expect(props.onClose).not.toHaveBeenCalled();
   });
 
-  it('閉じるは onClose を呼ぶ', async () => {
+  it('編集が無くても OK で閉じる (onChange は呼ばない)', async () => {
     const { user, props, dialog } = renderPreferences();
 
-    await user.click(within(dialog).getByTestId('preferences-close'));
+    await user.click(within(dialog).getByTestId('preferences-ok'));
 
+    expect(props.onChange).not.toHaveBeenCalled();
     expect(props.onClose).toHaveBeenCalledTimes(1);
     expect(props.onReset).not.toHaveBeenCalled();
   });

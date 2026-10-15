@@ -157,3 +157,12 @@ body,
 [data-testid$='-toolbar'] button:active:not(:disabled):not([aria-pressed='true']) {
   border-color: #808080 #ffffff #ffffff #808080 !important;
 }
+
+/* ツールバーの並べ替え中: 掴んでいるグループを薄く、挿入位置に縦の目印を出す */
+[data-reorder-dragging] {
+  opacity: 0.5;
+}
+
+[data-reorder-drop] {
+  box-shadow: inset 2px 0 0 #000080;
+}

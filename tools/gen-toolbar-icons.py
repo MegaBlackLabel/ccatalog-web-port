@@ -30,11 +30,31 @@ TOOLBAR_BITMAP_ID = 130  # 22 ボタンのメインストリップ (368x15)
 # 「チェックリストから外す」だけはストリップに無い (実行時に作られるボタン)。
 # 実機キャプチャのチェックツールバー右端のボタン (× 印) をそのまま切り出す。
 SHOT = r"D:\develop\comiket\解析\ui_capture\3-コミックマーケット カタロム - 新規チェックリスト.png"
+SHOT_CHECKLIST = r"D:\develop\comiket\解析\ui_capture\revealed-3-チェックリスト.png"
 SHOT_ICONS = {
-    # name: (x, y, w, h) — 実測: × 印は x 846..866 / y 56..71 あたり
-    "checkRemove": (845, 56, 16, 15),
+    # name: (png, x, y, w, h) — 実測: × 印は x 846..866 / y 56..71 あたり
+    "checkRemove": (SHOT, 845, 56, 16, 15),
+    # RSS はストリップに無く、ウィンドウのカーソルに隠れるためチェックリストの
+    # キャプチャから取る (赤い RSS ボタン / 赤の実測 x 70..81, y 37..48)。
+    "rss": (SHOT_CHECKLIST, 68, 35, 16, 15),
 }
 PALETTE_BITMAP_ID = 184  # 「色編集」のパレットアイコン (17x16)
+
+# プレビュー ウィンドウのツールバー アイコン (16x16 x 8)。背景は青で、透過にする。
+PREVIEW_BG = (0, 0, 255)
+PREVIEW_BITMAPS = {
+    20011: "zoom1_4",
+    20012: "zoom1_2",
+    20013: "zoom1",
+    20014: "zoom2",
+    20015: "zoom4",
+    20016: "pagePrev",
+    20017: "pageNext",
+    20018: "close",
+}
+OUT_PREVIEW_TS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "src", "ui", "print", "preview-icons.ts"
+)
 SLOT_W, SLOT_H = 16, 15
 BG = (192, 192, 192)  # ツールバーの背景 (透過にする)
 
@@ -136,14 +156,14 @@ def load_dib(data, rva2off, drva, dsize):
     return rows[::-1]  # DIB は下から上
 
 
-def svg_for(rows, x0, y0, w, h):
+def svg_for(rows, x0, y0, w, h, bg=BG):
     """1 スロットを SVG にする (同じ色の横ランを矩形 1 本ずつ)。"""
     runs = {}
     for y in range(h):
         x = 0
         while x < w:
             c = rows[y0 + y][x0 + x]
-            if c == BG:
+            if c == bg:
                 x += 1
                 continue
             x2 = x
@@ -191,17 +211,17 @@ def main():
     icons["colorEdit"] = data_uri(svg_for(pal, 0, 0, min(16, len(pal[0])), min(16, len(pal))))
 
     # 実機キャプチャから切り出すアイコン (ストリップに無いもの)。
-    if os.path.exists(SHOT):
-        from PIL import Image
-        shot = Image.open(SHOT).convert("RGB")
+    from PIL import Image
+
+    for name, (png, sx, sy, sw, sh) in SHOT_ICONS.items():
+        if not os.path.exists(png):
+            continue
+        shot = Image.open(png).convert("RGB")
         spx = shot.load()
-        for name, (sx, sy, sw, sh) in SHOT_ICONS.items():
-            rows = [[spx[sx + x, sy + y] for x in range(sw)] for y in range(sh)]
-            # キャプチャの背景 (240,240,240) も透過にする
-            flat = []
-            for row in rows:
-                flat.append([(192, 192, 192) if c == (240, 240, 240) else c for c in row])
-            icons[name] = data_uri(svg_for(flat, 0, 0, sw, sh))
+        rows = [[spx[sx + x, sy + y] for x in range(sw)] for y in range(sh)]
+        # キャプチャの背景 (240,240,240) も透過にする
+        flat = [[(192, 192, 192) if c == (240, 240, 240) else c for c in row] for row in rows]
+        icons[name] = data_uri(svg_for(flat, 0, 0, sw, sh))
 
     lines = [
         "/**",
@@ -222,6 +242,32 @@ def main():
     open(out, "w", encoding="utf-8", newline="\n").write("\n".join(lines))
     total = sum(len(v) for v in icons.values())
     print(f"wrote {out}: {len(icons)} icons, {total // 1024} KB")
+
+    # プレビュー ウィンドウのツールバー アイコン (RT_BITMAP 20011〜20018)。
+    preview = {}
+    for bitmap_id, name in sorted(PREVIEW_BITMAPS.items()):
+        rows = load_dib(data, rva2off, *bmps[bitmap_id])
+        preview[name] = data_uri(svg_for(rows, 0, 0, len(rows[0]), len(rows), PREVIEW_BG))
+    ids = sorted(PREVIEW_BITMAPS)
+    plines = [
+        "/**",
+        " * 元実装 (ccatalog.exe) のプレビュー ウィンドウのツールバーアイコンを",
+        " * PE の RT_BITMAP から SVG 化したもの。生成: tools/gen-toolbar-icons.py (手で編集しない)。",
+        f" * 元: {os.path.basename(exe)} の RT_BITMAP {ids[0]}〜{ids[-1]} (16x16)。",
+        " * 形は 1px 単位でそのまま (shape-rendering: crispEdges)、背景の青は透過。",
+        " */",
+        "export const PREVIEW_ICONS = {",
+    ]
+    for name in sorted(preview):
+        plines.append(f"  {name}: '{preview[name]}',")
+    plines.append("} as const;")
+    plines.append("")
+    plines.append("export type PreviewIconName = keyof typeof PREVIEW_ICONS;")
+    plines.append("")
+    pout = os.path.normpath(OUT_PREVIEW_TS)
+    open(pout, "w", encoding="utf-8", newline="\n").write("\n".join(plines))
+    ptotal = sum(len(v) for v in preview.values())
+    print(f"wrote {pout}: {len(preview)} icons, {ptotal // 1024} KB")
 
 
 if __name__ == "__main__":

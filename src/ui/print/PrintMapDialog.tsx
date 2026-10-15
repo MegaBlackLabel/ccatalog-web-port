@@ -977,8 +977,8 @@ export function PrintMapPage({ settings, onChange, onPreview }: PrintMapPageProp
           variant="default"
           data-testid="print-map-preview"
           data-ctrl-id={ids.preview}
-          // 実測 97x30。
-          style={{ width: 97, height: 30 }}
+          // 実物の 93x21 (UI-SPEC ダイアログ 165 / 166)。
+          style={{ width: 93, height: 21 }}
           onClick={onPreview}
         >
           プレビュー
