@@ -168,3 +168,24 @@ body,
 [data-reorder-drop] {
   box-shadow: -2px 0 0 0 #000080;
 }
+
+/* 印刷ダイアログ (1538) / 画像ファイル出力 (197) のラジオは実測 15〜17px ピッチ、
+   動作設定 (150) のチェックは 12 DLU = 22px ピッチ。
+   98.css は隣り合う .field-row に 6px の余白を入れるため、ここでは外して行の高さで詰める。 */
+[data-testid='print-dialog'] .field-row + .field-row,
+[data-testid='image-output-dialog'] .field-row + .field-row,
+[data-testid='preferences-dialog'] .field-row + .field-row {
+  margin-top: 0;
+}
+
+/* 印刷ダイアログ (1538) は実物と同じくサイズ変更不可にする。ライブラリの Window は
+   8 方向のリサイズ ハンドルを常に描く (リサイズ可否の props が無い) ので、このダイアログ
+   では描かせない (ハンドルが無ければ端のドラッグも効かない)。用紙サイズ・余白 (203) /
+   画像ファイル出力 (197) / 動作設定 (150・191・210・149) / チェック色の編集 (149 単体) も同じ。 */
+[data-testid='print-dialog'] [class*='resizeHandle'],
+[data-testid='page-setup-dialog'] [class*='resizeHandle'],
+[data-testid='image-output-dialog'] [class*='resizeHandle'],
+[data-testid='preferences-dialog'] [class*='resizeHandle'],
+[data-testid='check-color-dialog'] [class*='resizeHandle'] {
+  display: none;
+}

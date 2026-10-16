@@ -1,5 +1,8 @@
+// app.css を直接読むために node の型を参照する (tsconfig の types は vitest と jest-dom だけ)。
+/// <reference types="node" />
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PRINT_CUT_SETTINGS, PrintCutDialog, PrintCutPage } from './PrintCutDialog';
 import type { PrintCutDialogProps, PrintCutSettings } from './PrintCutDialog';
@@ -9,6 +12,10 @@ import { DEFAULT_PRINT_LIST_SETTINGS, PrintListDialog, PrintListPage } from './P
 import type { PrintListDialogProps, PrintListSettings, PrintTarget } from './PrintListDialog';
 import { DEFAULT_PRINT_MAP_SETTINGS, PrintMapDialog, PrintMapPage } from './PrintMapDialog';
 import type { PrintMapDialogProps, PrintMapSettings } from './PrintMapDialog';
+
+// 印刷ダイアログのリサイズ ハンドルを消す規則は app.css 側にある (ライブラリが常に描くため)。
+// テストでは CSS が読み込まれない (vite.config.ts の test.css = false) ので、ファイルを直接見る。
+const appCss = readFileSync('src/styles/app.css', 'utf8');
 
 /** 印刷範囲のフィクスチャ。既定から外した値にして、変更時に他の項目が保たれるかを見る。 */
 const TARGET: PrintTarget = { days: [2], halls: ['東1'], colors: [3] };
@@ -197,7 +204,6 @@ function renderMapPage(blank = false) {
 
 function renderPrint(overrides: Partial<PrintDialogProps> = {}) {
   const props: PrintDialogProps = {
-    documentName: 'サークルリスト (1日目 東1)',
     onPrint: vi.fn(),
     onPageSetup: vi.fn(),
     onClose: vi.fn(),
@@ -1174,35 +1180,238 @@ describe('PrintMapPage', () => {
 });
 
 describe('PrintDialog', () => {
-  it('タイトルとダミーのプリンタ一覧、文書名を表示する', () => {
+  /** ダイアログ 1538 のグループ (legend で引く)。 */
+  const groupOf = (dialog: HTMLElement, legend: string) =>
+    [...dialog.querySelectorAll('fieldset')].find(
+      (field) => field.querySelector(':scope > legend')?.textContent === legend,
+    ) as HTMLElement;
+
+  it('タイトルとダミーのプリンタ一覧、プリンタのプロパティを表示する', () => {
     const { dialog } = renderPrint();
 
     expect(screen.getByText('印刷')).toBeInTheDocument();
     expect(PRINTERS).toHaveLength(3);
-    expect(within(dialog).getAllByRole('option')).toHaveLength(3);
+    expect(within(within(dialog).getByTestId('print-printer')).getAllByRole('option')).toHaveLength(
+      3,
+    );
     expect(within(dialog).getByTestId('print-printer')).toHaveValue(PRINTERS[0]);
-    expect(within(dialog).getByTestId('print-document-name')).toHaveTextContent(
-      'サークルリスト (1日目 東1)',
+    // 状態 / 種類 / 場所 / コメント (1095〜1101) はプリンタごとのダミー。
+    expect(within(dialog).getByTestId('print-printer-status')).toHaveTextContent('準備完了');
+    expect(within(dialog).getByTestId('print-printer-kind')).toHaveTextContent(
+      'Microsoft Print To PDF',
+    );
+    expect(within(dialog).getByTestId('print-printer-where')).toHaveTextContent('PORTPROMPT:');
+    expect(within(dialog).getByTestId('print-printer-comment')).toBeEmptyDOMElement();
+    // 用紙サイズ (元リソースの 1641) は A4 を表示するコンボ。
+    expect(within(dialog).getByTestId('print-paper-size')).toHaveValue('A4');
+    // 実物は文書名を出さない。
+    expect(within(dialog).queryByTestId('print-document-name')).toBeNull();
+  });
+
+  it('グループは実物の実測どおりの寸法で並ぶ (プリンタ 476x128 / 印刷範囲 252x96 / 印刷部数 210x96 / 印刷形式 476x90 / Tips 476x56)', () => {
+    const { dialog } = renderPrint();
+
+    for (const [legend, width, height] of [
+      ['プリンタ', '476px', '128px'],
+      ['印刷範囲', '252px', '96px'],
+      ['印刷部数', '210px', '96px'],
+      ['印刷形式', '476px', '90px'],
+      ['Tips', '476px', '56px'],
+    ] as const) {
+      const group = groupOf(dialog, legend);
+      expect(group.style.width).toBe(width);
+      expect(group.style.height).toBe(height);
+    }
+
+    // 印刷範囲 (1072) と印刷部数 (1073) は 1 段に並ぶ。
+    expect(
+      groupOf(dialog, '印刷範囲').compareDocumentPosition(groupOf(dialog, '印刷部数')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('説明文エリアは高さを固定する (形式を変えても縮まない)', async () => {
+    const { user, dialog } = renderPrint();
+    const description = within(dialog).getByTestId('print-format-description');
+
+    // いちばん長い文言 (2 行) が入る高さで固定する。
+    expect(description.style.height).toBe('32px');
+
+    for (const name of ['白地図印刷(W)', 'サークルカット印刷(U)', 'マップ印刷(M)']) {
+      await user.click(within(dialog).getByRole('radio', { name }));
+      expect(within(dialog).getByTestId('print-format-description').style.height).toBe('32px');
+    }
+  });
+
+  it('本文はスクロールさせず、リサイズ ハンドルとサイズ グリップを出さない', () => {
+    const { dialog } = renderPrint();
+    const body = dialog.querySelector('.window-body') as HTMLElement;
+    const content = body.firstElementChild as HTMLElement;
+
+    // はみ出さない前提にして、スクロールバーを出さない (元実装の本文は 436px で収まる)。
+    expect(content.style.overflow).toBe('hidden');
+    expect(body.style.overflow).toBe('hidden');
+    // 右下のサイズ グリップは statusBar を渡さないので描かれない。
+    expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
+    expect(dialog.querySelector('.status-bar')).toBeNull();
+    // リサイズ ハンドルはライブラリが描くので、app.css でこのダイアログだけ消す。
+    expect(appCss).toContain("[data-testid='print-dialog'] [class*='resizeHandle']");
+  });
+
+  it('印刷形式は 4 つのラジオで、実物のラベルを出す (アイコンは付けない)', () => {
+    const { dialog } = renderPrint();
+
+    for (const [name, controlId] of [
+      ['サークルリストID(K)', 1046],
+      ['サークルカット印刷(U)', 1048],
+      ['マップ印刷(M)', 1049],
+      ['白地図印刷(W)', 1053],
+    ] as const) {
+      const radio = within(dialog).getByRole('radio', { name });
+      expect(dialog.querySelector(`[data-ctrl-id="${controlId}"]`)).toBe(radio);
+      // 実物のラジオにアイコンは無い。
+      expect(radio.parentElement?.querySelector('label img')).toBeNull();
+    }
+
+    expect(within(dialog).getByRole('radio', { name: 'サークルリストID(K)' })).toBeChecked();
+    // 説明文は実物のスタティック 1050 と同じ凹んだ枠 (SS_SUNKEN) に入る。
+    const description = within(dialog).getByTestId('print-format-description');
+    expect(description.className).toContain('sunken-panel');
+    expect(description).toHaveTextContent(
+      'チェックリストに登録されているサークルを、画像なしの一覧表形式で印刷します。',
     );
   });
 
-  it('OK は選択中のプリンタで onPrint を呼ぶ', async () => {
-    const { user, props, dialog } = renderPrint();
+  it('印刷形式を選び直すと説明文が入れ替わる', async () => {
+    const { user, dialog } = renderPrint();
 
-    await user.click(within(dialog).getByTestId('print-submit'));
-
-    expect(props.onPrint).toHaveBeenCalledTimes(1);
-    expect(props.onPrint).toHaveBeenCalledWith(PRINTERS[0]);
-    expect(props.onClose).not.toHaveBeenCalled();
+    for (const [name, text] of [
+      ['サークルリストID(K)', 'チェックリストに登録されているサークルを、画像なしの一覧表形式で印刷します。'],
+      ['サークルカット印刷(U)', 'チェックリストに登録されているサークルを、サークルカット画像付きで印刷します。'],
+      ['マップ印刷(M)', '会場マップを、チェックリストに登録されているサークルの配置情報と共に印刷します。'],
+      ['白地図印刷(W)', '会場マップのみを印刷します。'],
+    ] as const) {
+      await user.click(within(dialog).getByRole('radio', { name }));
+      expect(within(dialog).getByTestId('print-format-description')).toHaveTextContent(text);
+      expect(within(dialog).getByRole('radio', { name })).toBeChecked();
+    }
   });
 
-  it('プリンタを選び直すとその名前で onPrint を呼ぶ', async () => {
+  it('印刷部数の絵は右下ではなく左下に置く (スタティック 1086)', () => {
+    const { dialog } = renderPrint();
+    const icon = within(dialog).getByTestId('print-copies-icon');
+    const copies = within(dialog).getByTestId('print-copies');
+    const collate = within(dialog).getByTestId('print-collate');
+
+    expect(icon).toHaveAttribute('data-ctrl-id', '1086');
+    expect(icon).toHaveAttribute('width', '40');
+    expect(icon).toHaveAttribute('height', '34');
+    expect(icon.getAttribute('src')).toContain('data:image/svg+xml');
+    // 部数 / 部単位の行より後ろ (下) に置く。
+    expect(copies.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(collate.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('印刷範囲は 2 つの数値入力と有効範囲を出し、ページ指定を選べる', async () => {
+    const { user, dialog } = renderPrint({ maxPage: 42 });
+
+    expect(within(dialog).getByText('(有効範囲 : 1-42)')).toBeInTheDocument();
+    expect(within(dialog).getByRole('radio', { name: 'すべて(A)' })).toBeChecked();
+    expect(within(dialog).getByTestId('print-page-from')).toHaveValue('1');
+    expect(within(dialog).getByTestId('print-page-to')).toHaveValue('1');
+
+    await user.click(within(dialog).getByRole('radio', { name: 'ページ指定(G) :' }));
+    await user.clear(within(dialog).getByTestId('print-page-from'));
+    await user.type(within(dialog).getByTestId('print-page-from'), '5');
+
+    expect(within(dialog).getByRole('radio', { name: 'ページ指定(G) :' })).toBeChecked();
+    expect(within(dialog).getByTestId('print-page-from')).toHaveValue('5');
+  });
+
+  it('部数は上下スピン相当で 1 ずつ増減する (1 未満にならない)', async () => {
+    const { user, dialog } = renderPrint();
+
+    expect(within(dialog).getByTestId('print-copies')).toHaveValue('1');
+
+    await user.click(within(dialog).getByTestId('print-copies-up'));
+    expect(within(dialog).getByTestId('print-copies')).toHaveValue('2');
+
+    await user.click(within(dialog).getByTestId('print-copies-down'));
+    await user.click(within(dialog).getByTestId('print-copies-down'));
+    expect(within(dialog).getByTestId('print-copies')).toHaveValue('1');
+  });
+
+  it('OK は選んだ設定 (プリンタ / 形式 / 範囲 / 部数 / 部単位 / GDI+) をまとめて渡す', async () => {
     const { user, props, dialog } = renderPrint();
 
     await user.selectOptions(within(dialog).getByTestId('print-printer'), PRINTERS[1]);
+    await user.click(within(dialog).getByRole('radio', { name: 'サークルカット印刷(U)' }));
+    await user.click(within(dialog).getByRole('radio', { name: 'ページ指定(G) :' }));
+    await user.clear(within(dialog).getByTestId('print-page-from'));
+    await user.type(within(dialog).getByTestId('print-page-from'), '3');
+    await user.clear(within(dialog).getByTestId('print-page-to'));
+    await user.type(within(dialog).getByTestId('print-page-to'), '9');
+    await user.clear(within(dialog).getByTestId('print-copies'));
+    await user.type(within(dialog).getByTestId('print-copies'), '4');
+    await user.click(within(dialog).getByTestId('print-collate'));
+    await user.click(within(dialog).getByTestId('print-no-gdiplus'));
     await user.click(within(dialog).getByTestId('print-submit'));
 
-    expect(props.onPrint).toHaveBeenCalledWith(PRINTERS[1]);
+    expect(props.onPrint).toHaveBeenCalledTimes(1);
+    expect(props.onPrint).toHaveBeenCalledWith({
+      printer: PRINTERS[1],
+      format: 'cut',
+      range: { all: false, from: 3, to: 9 },
+      copies: 4,
+      collate: true,
+      noGdiPlus: true,
+    });
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('既定の OK はすべて(A)・部数 1・部単位なし・GDI+ なしを渡す', async () => {
+    const { user, props, dialog } = renderPrint({ maxPage: 7 });
+
+    await user.click(within(dialog).getByTestId('print-submit'));
+
+    expect(props.onPrint).toHaveBeenCalledWith({
+      printer: PRINTERS[0],
+      format: 'list',
+      range: { all: true, from: 1, to: 1 },
+      copies: 1,
+      collate: false,
+      noGdiPlus: false,
+    });
+  });
+
+  it('プレビュー / 詳細設定 / 詳細説明は選んだ形式を渡してコールバックを呼ぶ', async () => {
+    const onPreview = vi.fn();
+    const onDetails = vi.fn();
+    const onHelp = vi.fn();
+    const { user, props, dialog } = renderPrint({ onPreview, onDetails, onHelp });
+
+    await user.click(within(dialog).getByTestId('print-preview'));
+    expect(onPreview).toHaveBeenCalledWith('list');
+
+    await user.click(within(dialog).getByRole('radio', { name: '白地図印刷(W)' }));
+    await user.click(within(dialog).getByTestId('print-details'));
+    expect(onDetails).toHaveBeenCalledWith('blankMap');
+
+    await user.click(within(dialog).getByTestId('print-help'));
+    expect(onHelp).toHaveBeenCalledTimes(1);
+
+    expect(props.onPrint).not.toHaveBeenCalled();
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('コールバック未指定でもプレビュー / 詳細設定 / 詳細説明は無効にならない', async () => {
+    const { user, dialog } = renderPrint();
+
+    for (const testId of ['print-preview', 'print-details', 'print-help']) {
+      const button = within(dialog).getByTestId(testId);
+      expect(button).toBeEnabled();
+      await user.click(button);
+    }
   });
 
   it('用紙・余白の変更は onPageSetup を呼ぶ (元リソース 1656)', async () => {
@@ -1213,6 +1422,12 @@ describe('PrintDialog', () => {
     expect(props.onPageSetup).toHaveBeenCalledTimes(1);
     expect(props.onPrint).not.toHaveBeenCalled();
     expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('プロパティは Web 版では開けない (無効)', () => {
+    const { dialog } = renderPrint();
+
+    expect(within(dialog).getByRole('button', { name: 'プロパティ(P)...' })).toBeDisabled();
   });
 
   it('キャンセルは onClose を呼び、印刷はしない', async () => {

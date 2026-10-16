@@ -326,6 +326,8 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
   const [printTab, setPrintTab] = useState<PrintSettingsTabId>('list');
   /** 印刷詳細設定の上に出す用紙サイズ・余白の設定 (元ダイアログ 203)。 */
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
+  /** 印刷ダイアログ (1538) の上に重ねる印刷詳細設定 (163〜166)。 */
+  const [printSettingsOpen, setPrintSettingsOpen] = useState(false);
   const [preview, setPreview] = useState<{
     title: string;
     pageCount: number;
@@ -1072,6 +1074,23 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     ],
   );
 
+  /**
+   * 印刷詳細設定 (163〜166) の props。メニューの「ファイル > 印刷詳細設定」からは単独で、
+   * 印刷ダイアログ (1538) の「詳細設定(N)...」からはその上に重ねて出す (閉じるだけが違う)。
+   */
+  const printSettingsProps = {
+    initialTab: printTab,
+    listSettings: printListSettings,
+    cutSettings: printCutSettings,
+    mapSettings: printMapSettings,
+    onListChange: (patch: Partial<PrintListSettings>) =>
+      setPrintListSettings((value) => ({ ...value, ...patch })),
+    onCutChange: (patch: Partial<PrintCutSettings>) =>
+      setPrintCutSettings((value) => ({ ...value, ...patch })),
+    onMapChange: (patch: Partial<PrintMapSettings>) =>
+      setPrintMapSettings((value) => ({ ...value, ...patch })),
+    onPreview: openPrintPreview,
+  };
 
   const handleCommand = useCallback(
     (command: number) => {
@@ -1720,7 +1739,12 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         />
       )}
 
-      {helpMode !== null && <HelpDialog mode={helpMode} onClose={() => setHelpMode(null)} />}
+      {helpMode !== null && (
+        // 印刷ダイアログ (1538) の「詳細説明」からも開くため、ダイアログの上に重ねる。
+        <div style={DIALOG_LIFT_STYLE}>
+          <HelpDialog mode={helpMode} onClose={() => setHelpMode(null)} />
+        </div>
+      )}
 
       {dialog === 'preferences' && (
         <PreferencesDialog
@@ -1748,7 +1772,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
       {dialog === 'pageSetup' && (
         <PageSetupDialog
           setup={state.pageSetup}
-          onChange={(patch) => dispatch({ type: 'pageSetup/set', patch })}
+          onChange={(setup) => dispatch({ type: 'pageSetup/set', patch: setup })}
           onClose={() => setDialog(null)}
         />
       )}
@@ -1763,37 +1787,51 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
       )}
 
       {dialog === 'printSettings' && (
-        <PrintSettingsDialog
-          initialTab={printTab}
-          listSettings={printListSettings}
-          cutSettings={printCutSettings}
-          mapSettings={printMapSettings}
-          onListChange={(patch) => setPrintListSettings((value) => ({ ...value, ...patch }))}
-          onCutChange={(patch) => setPrintCutSettings((value) => ({ ...value, ...patch }))}
-          onMapChange={(patch) => setPrintMapSettings((value) => ({ ...value, ...patch }))}
-          onPreview={openPrintPreview}
-          onClose={() => setDialog(null)}
-        />
+        <PrintSettingsDialog {...printSettingsProps} onClose={() => setDialog(null)} />
       )}
 
       {dialog === 'printDialog' && (
         <>
           <PrintDialog
-            documentName={windowTitle}
-            onPrint={(printer) => {
-              setMessage(`${printer} へ印刷します`);
-              setPrintTab('list');
+            maxPage={lastPage}
+            onPrint={(options) => {
+              setMessage(`${options.printer} へ印刷します`);
+              // 実物と同じく、OK のあとは印刷形式ごとの詳細設定 (163〜166) を出す。
+              setPrintTab(options.format);
               setDialog('printSettings');
             }}
             // 実物と同じく、用紙・余白の設定 (203) は印刷ダイアログから開く。
             onPageSetup={() => setPageSetupOpen(true)}
-            onClose={() => setDialog(null)}
+            // 詳細設定 (1051)。メニューの「印刷詳細設定」と同じダイアログを選んだ形式のタブで重ねる。
+            onDetails={(format) => {
+              setPrintTab(format);
+              setPrintSettingsOpen(true);
+            }}
+            // 詳細説明 (1642)。実物はヘルプ (CHM) を開くので、Web 版はヘルプの目次を出す。
+            onHelp={() => setHelpMode('contents')}
+            // プレビュー (1052)。選んだ印刷形式のプレビューを開く。
+            onPreview={openPrintPreview}
+            onClose={() => {
+              setPrintSettingsOpen(false);
+              setDialog(null);
+            }}
           />
+          {printSettingsOpen && (
+            <div style={DIALOG_LIFT_STYLE}>
+              {/* 印刷ダイアログの右隣に出す (画像ファイル出力の詳細設定と同じ置き方)。 */}
+              <PrintSettingsDialog
+                {...printSettingsProps}
+                initialX={820}
+                initialY={80}
+                onClose={() => setPrintSettingsOpen(false)}
+              />
+            </div>
+          )}
           {pageSetupOpen && (
             <div style={DIALOG_LIFT_STYLE}>
               <PageSetupDialog
                 setup={state.pageSetup}
-                onChange={(patch) => dispatch({ type: 'pageSetup/set', patch })}
+                onChange={(setup) => dispatch({ type: 'pageSetup/set', patch: setup })}
                 onClose={() => setPageSetupOpen(false)}
               />
             </div>

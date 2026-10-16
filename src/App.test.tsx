@@ -57,11 +57,16 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** 動作設定ダイアログ (ダイアログ 150) で 1 項目だけ切り替えて閉じる。 */
+/**
+ * 動作設定ダイアログ (ダイアログ 150) で 1 項目だけ切り替えて閉じる。
+ * ラベルは実物のニーモニック付き (「…する (S)」) なので、先頭一致で引く
+ * (ラベルそのものはダイアログのテストで見る)。
+ */
 async function toggleSetting(user: UserEvent, label: string) {
   await chooseMenu(user, 'ファイル(F)', /^動作設定\(C\)\.\.\./);
   const dialog = await screen.findByTestId('preferences-dialog');
-  await user.click(within(dialog).getByLabelText(label));
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await user.click(within(dialog).getByLabelText(new RegExp(`^${escaped}`)));
   await user.click(within(dialog).getByTestId('preferences-ok'));
 }
 
@@ -347,6 +352,16 @@ describe('App — サークル一覧のツールバー', () => {
       .map((row) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent ?? ''));
   }
 
+  /** 列名で引いた 1 列分のセル (列の並びは「リスト表示」の設定で変わる)。 */
+  function listedColumn(list: HTMLElement, header: string): string[] {
+    const headers = within(list)
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent);
+    const index = headers.indexOf(header);
+    if (index < 0) throw new Error(`${header} の列がありません`);
+    return listedCells(list).map((row) => row[index] ?? '');
+  }
+
   it('一覧を開くと、最初の日付とブロックのサークルを出す', async () => {
     await renderApp();
     const list = await openList();
@@ -364,7 +379,7 @@ describe('App — サークル一覧のツールバー', () => {
     const cells = listedCells(list);
     expect(cells).toHaveLength(expected);
     // 日付の列。
-    expect(cells.every((row) => row[5] === `${day}日目`)).toBe(true);
+    expect(listedColumn(list, '日付').every((cell) => cell === `${day}日目`)).toBe(true);
   });
 
   it('表示モードを「日付／インデックス」にすると、選んだ読みのかな行だけを出す', async () => {
@@ -377,10 +392,12 @@ describe('App — サークル一覧のツールバー', () => {
     const cells = listedCells(list);
     expect(cells.length).toBeGreaterThan(0);
     // すべて既定の日付 (1 日目) のサークル。
-    expect(cells.every((row) => row[5] === '1日目')).toBe(true);
+    expect(listedColumn(list, '日付').every((cell) => cell === '1日目')).toBe(true);
     // 読みの 1 文字目はすべて「あ」行 (あいうえお + 小書き)。
     const aRow = normalize('あいうえおぁぃぅぇぉ');
-    expect(cells.every((row) => aRow.includes(normalize(row[1].charAt(0))))).toBe(true);
+    expect(
+      listedColumn(list, '読み').every((cell) => aRow.includes(normalize(cell.charAt(0)))),
+    ).toBe(true);
   });
 
   it('簡易検索ボックスはリターンキーで検索を実行し、件数をステータスバーに出す', async () => {
@@ -414,7 +431,7 @@ describe('App — サークル一覧のツールバー', () => {
   it('一覧で選んだサークルを「チェック解除」でチェックリストから外す', async () => {
     const { user } = await renderApp();
     const list = await openList();
-    const name = within(list).getAllByRole('row')[1].querySelector('td')?.textContent ?? '';
+    const name = listedColumn(list, 'サークル名')[0] ?? '';
     expect(name.length).toBeGreaterThan(0);
 
     // 同じサークルをカット側でダブルクリックしてチェックリスト (1 日目のタブ) に載せる。
@@ -544,6 +561,28 @@ describe('App — 残りのダイアログをメニューから開ける', () =>
     expect(await screen.findByTestId('print-settings-dialog')).toBeInTheDocument();
   });
 
+  it('印刷ダイアログの詳細設定は印刷詳細設定を上に重ね、印刷ダイアログは開いたままにする', async () => {
+    const { user } = await renderApp();
+    await chooseMenu(user, 'ファイル(F)', /^印刷\(P\)/);
+    const printDialog = await screen.findByTestId('print-dialog');
+
+    await user.click(within(printDialog).getByRole('radio', { name: 'マップ印刷(M)' }));
+    await user.click(within(printDialog).getByTestId('print-details'));
+
+    const settings = await screen.findByTestId('print-settings-dialog');
+    expect(settings).toBeInTheDocument();
+    // 選んだ形式のタブで開き、印刷ダイアログは閉じない (重ねて出す)。
+    expect(within(settings).getByRole('tab', { name: 'マップ印刷' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('print-dialog')).toBeInTheDocument();
+
+    await user.click(within(settings).getByTestId('print-settings-cancel'));
+    expect(screen.queryByTestId('print-settings-dialog')).toBeNull();
+    expect(screen.getByTestId('print-dialog')).toBeInTheDocument();
+  });
+
   it('ブックマークを追加できる', async () => {
     const { user } = await renderApp();
     await chooseMenu(user, 'ブックマーク(B)', /^このページを追加/);
@@ -588,11 +627,14 @@ describe('App — 残りのダイアログをメニューから開ける', () =>
     const details = await screen.findByTestId('print-list-dialog');
     await user.click(within(details).getByRole('button', { name: '閉じる' }));
 
-    // ページ指定で出力 → 指定したページ数がステータスバーに出る。
-    await user.click(within(dialog).getByLabelText('ページ指定 :'));
-    const pages = within(dialog).getByTestId('image-output-pages');
-    await user.clear(pages);
-    await user.type(pages, '1-3');
+    // ページ指定で出力 → 指定したページ数がステータスバーに出る (範囲は 1 - 3)。
+    await user.click(within(dialog).getByLabelText('ページ指定(G) :'));
+    const from = within(dialog).getByTestId('image-output-page-from');
+    await user.clear(from);
+    await user.type(from, '1');
+    const to = within(dialog).getByTestId('image-output-page-to');
+    await user.clear(to);
+    await user.type(to, '3');
     await user.click(within(dialog).getByTestId('image-output-submit'));
 
     await waitFor(() =>
@@ -856,17 +898,25 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
     const printDialog = await screen.findByTestId('print-dialog');
     await user.click(within(printDialog).getByTestId('print-page-setup'));
     const setup = await screen.findByTestId('page-setup-dialog');
-    const dpi = within(setup).getByLabelText('DPI');
-    await user.clear(dpi);
-    await user.type(dpi, '600');
-    await user.click(within(setup).getByTestId('page-setup-close'));
+    const paper = within(setup).getByLabelText('用紙(P)');
+    await user.selectOptions(paper, 'A3');
+    const left = within(setup).getByLabelText('左(L)');
+    await user.clear(left);
+    await user.type(left, '60');
+    await user.click(within(setup).getByTestId('page-setup-ok'));
+
+    // OK で閉じると印刷ダイアログに戻る。
+    expect(screen.queryByTestId('page-setup-dialog')).toBeNull();
+    expect(screen.getByTestId('print-dialog')).toBeInTheDocument();
     await user.click(within(printDialog).getByTestId('print-cancel'));
 
     await chooseMenu(user, 'ファイル(F)', /^印刷詳細設定/);
     const settings = await screen.findByTestId('print-settings-dialog');
     await user.click(within(settings).getByRole('button', { name: 'プレビュー' }));
 
-    expect(await screen.findByTestId('preview-page-setup')).toHaveTextContent('600dpi');
+    const shown = await screen.findByTestId('preview-page-setup');
+    expect(shown).toHaveTextContent('用紙 A3 297.0×420.0mm');
+    expect(shown).toHaveTextContent('余白 左 60.0');
   });
 
   it('一覧の追従 (1022) を入れると、選んだサークルの日付とブロックへ一覧が切り替わる', async () => {
@@ -1007,13 +1057,14 @@ describe('App — メニューの残り (ファイル / 表示 / ページ移動
     await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
   });
 
-  it('リスト中のカット表示 (32868) を入れると一覧にカットの列が出る', async () => {
+  it('リスト中のカット表示 (32868) で一覧のカットの列を入れ外しできる', async () => {
     const { user } = await renderApp();
     const list = await screen.findByTestId('list-window');
-    expect(within(list).queryAllByTestId('list-cut')).toHaveLength(0);
+    // 「リスト表示」の既定でサークルカットの列が出ている。
+    expect(within(list).getAllByTestId('list-cut').length).toBeGreaterThan(0);
 
+    // 表示 > リスト中のカット表示 (32868) は入っていないので、入れても二重にならない。
     await chooseMenu(user, '表示(V)', /^リスト中のカット表示/);
-
     await waitFor(() => expect(within(list).getAllByTestId('list-cut').length).toBeGreaterThan(0));
     expect(within(list).getAllByTestId('list-cut')[0]).toHaveAttribute(
       'src',
@@ -1126,7 +1177,7 @@ describe('App — 保存 (元実装の INI / チェックリストファイル�
     await screen.findByTestId('main-window');
     await chooseMenu(user, 'ファイル(F)', /^動作設定\(C\)\.\.\./);
 
-    expect(await screen.findByLabelText('シングルクリックでチェックする')).toBeChecked();
+    expect(await screen.findByLabelText('シングルクリックでチェックする (S)')).toBeChecked();
   });
 
   it('起動時に前回のチェックリストを読み込む (1664) を入れると、次の起動でもチェックリストが残る', async () => {
@@ -1165,7 +1216,7 @@ describe('App — 動作設定 (プロパティシート)', () => {
     return dialog;
   }
 
-  it('元実装と同じ 4 ページを持ち、ウィンドウは 487 x 670 (ラベルが折り返さない幅)', async () => {
+  it('元実装と同じ 4 ページを持ち、ウィンドウは 510 x 670 (ラベルが折り返さない幅)', async () => {
     const { user } = await renderApp();
     const dialog = await openPage(user, '動作オプション');
 
@@ -1176,7 +1227,7 @@ describe('App — 動作設定 (プロパティシート)', () => {
       'チェック色',
     ]);
     const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
-    expect(root.style.width).toBe('487px');
+    expect(root.style.width).toBe('510px');
     expect(root.style.height).toBe('670px');
   });
 
@@ -1185,19 +1236,21 @@ describe('App — 動作設定 (プロパティシート)', () => {
 
     // ② パス設定 (元ダイアログ 191)
     let dialog = await openPage(user, 'パス設定');
-    expect(within(dialog).getByLabelText('自動検索する')).toBeChecked();
-    expect(within(dialog).getByLabelText('指定場所から読み込む')).not.toBeChecked();
+    expect(within(dialog).getByLabelText('自動検索する(F)')).toBeChecked();
+    expect(within(dialog).getByLabelText('指定場所から読み込む(R)')).not.toBeChecked();
     expect(within(dialog).getByLabelText('画像データの場所')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('標準')).toBeChecked();
+    expect(within(dialog).getByLabelText('標準(S)')).toBeChecked();
     expect(within(dialog).getByLabelText('ブラウザの場所')).toBeInTheDocument();
     await user.click(within(dialog).getByTestId('preferences-ok'));
 
     // ③ リスト表示 (元ダイアログ 210)
     dialog = await openPage(user, 'リスト表示');
-    expect(within(dialog).getByText('チェックリスト 表示項目')).toBeInTheDocument();
-    expect(within(dialog).getByText('サークル一覧 表示項目')).toBeInTheDocument();
-    expect(within(dialog).getAllByRole('button', { name: '前へ移動' })).toHaveLength(2);
-    expect(within(dialog).getAllByRole('button', { name: '後へ移動' })).toHaveLength(2);
+    expect(within(dialog).getByText('チェックリスト 表示項目 (C)')).toBeInTheDocument();
+    expect(within(dialog).getByText('サークル一覧 表示項目 (L)')).toBeInTheDocument();
+    expect(within(dialog).getAllByRole('button', { name: '前へ移動(F)' })).toHaveLength(1);
+    expect(within(dialog).getAllByRole('button', { name: '後へ移動(B)' })).toHaveLength(1);
+    expect(within(dialog).getAllByRole('button', { name: '前へ移動(P)' })).toHaveLength(1);
+    expect(within(dialog).getAllByRole('button', { name: '後へ移動(N)' })).toHaveLength(1);
     expect(within(dialog).getByTestId('preferences-list-default')).toBeInTheDocument();
     await user.click(within(dialog).getByTestId('preferences-ok'));
 
@@ -1216,7 +1269,7 @@ describe('App — 動作設定 (プロパティシート)', () => {
     const { user } = await renderApp();
     const dialog = await openPage(user, 'パス設定');
 
-    await user.click(within(dialog).getByLabelText('指定場所から読み込む'));
+    await user.click(within(dialog).getByLabelText('指定場所から読み込む(R)'));
     await user.clear(within(dialog).getByLabelText('画像データの場所'));
     await user.type(within(dialog).getByLabelText('画像データの場所'), 'https://cdn.example.com/img');
     await user.click(within(dialog).getByTestId('preferences-ok'));
