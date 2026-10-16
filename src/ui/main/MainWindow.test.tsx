@@ -272,23 +272,6 @@ describe('MainWindow', () => {
     }
   });
 
-  it('ツールバーが 1 段のときは段と段の間に溝を入れない', () => {
-    mockToolbarWidths(1245);
-    const { main } = renderMain();
-    const strip = within(main).getByTestId('main-toolbar');
-    const rows = within(main).getAllByTestId('toolbar-row');
-
-    expect(rows).toHaveLength(1);
-    // 帯の直下は段 1 個だけ。帯の外周の溝はライブラリの帯が持ち、段の間の横 Groove は挿さらない。
-    expect(strip.children).toHaveLength(1);
-    expect(strip.children[0]).toBe(rows[0]);
-    expect(
-      Array.from(strip.children).filter(
-        (child) => child.getAttribute('aria-orientation') === 'horizontal',
-      ),
-    ).toHaveLength(0);
-  });
-
   it('ツールバーを実物と同じ 5 グループ (ドッキング ツールバー) に分ける', () => {
     const { main } = renderMain();
     const groups = within(main).getAllByRole('toolbar');
@@ -448,38 +431,34 @@ describe('MainWindow', () => {
     expect(within(main).getByRole('combobox', { name: 'ホールジャンプ' })).toBeDisabled();
   });
 
-  it('幅に入りきらないグループは次の段へ折り返す (実測 900px では 2 段)', () => {
-    mockToolbarWidths(900);
-    const { main } = renderMain();
-    const rows = within(main).getAllByTestId('toolbar-row');
+  it('段は初期値で決まる (幅では折り返さない)', () => {
+    // 実物の rebar と同じく段は RBBS_BREAK 相当 (INITIAL_TOOLBAR_ROWS) で決まり、
+    // 幅では自動で折り返さない。狭くても広くても同じ段になる。
+    const expected = [
+      ['基本ツールバー', 'ページ移動ツールバー', '表示ツールバー', '表示ツールバー'],
+      ['チェックツールバー', 'ナビゲートツールバー'],
+    ];
+    for (const width of [900, 1245]) {
+      cleanup();
+      mockToolbarWidths(width);
+      const { main } = renderMain();
+      const rows = within(main).getAllByTestId('toolbar-row');
 
-    expect(
-      rows.map((row) =>
-        within(row)
-          .getAllByRole('toolbar')
-          .map((group) => group.getAttribute('aria-label')),
-      ),
-    ).toEqual([
-      ['基本ツールバー', 'ページ移動ツールバー', '表示ツールバー', '表示ツールバー', 'チェックツールバー'],
-      ['ナビゲートツールバー'],
-    ]);
+      expect(
+        rows.map((row) =>
+          within(row)
+            .getAllByRole('toolbar')
+            .map((group) => group.getAttribute('aria-label')),
+        ),
+      ).toEqual(expected);
+    }
   });
 
-  it('幅が足りていれば (実測 1245px) 全グループが 1 段に収まる', () => {
-    mockToolbarWidths(1245);
+  it('幅を計測できなくても段は初期値のまま', () => {
     const { main } = renderMain();
     const rows = within(main).getAllByTestId('toolbar-row');
 
-    expect(rows).toHaveLength(1);
-    // グループは 5 つだが、表示ツールバーは拡大率の Edit を挟んで 2 本に分かれる。
-    expect(within(rows[0]).getAllByRole('toolbar')).toHaveLength(TOOLBAR_GROUPS.length + 1);
-  });
-
-  it('幅を計測できないときは 1 段のまま CSS の折り返しに任せる', () => {
-    const { main } = renderMain();
-    const rows = within(main).getAllByTestId('toolbar-row');
-
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
     // 段の並び (display / flex-wrap / align-items / 背景) はライブラリの ToolbarRow が持つ。
     // アプリが inline で残すのは左右 2px の余白と、グループ同士の間隔 2px。
     expect(rows[0].className).toContain('bandRow');
