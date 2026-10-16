@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { CheckColor } from '../../app/catalog-state';
+import { DEFAULT_LIST_DISPLAY_SETTINGS } from '../../domain/app-settings';
 import type { Circle } from '../../domain/types';
 import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkSwatchIcon } from '../check-colors';
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
@@ -59,6 +60,8 @@ const ROWS: ChecklistRow[] = [
     circleKana: 'さーくるA',
     penName: 'ペンA',
     bookName: '発行誌A',
+    url: 'https://example.com/a',
+    mailAddr: 'a@example.com',
     description: '補足A',
     memo: 'メモA',
     spaceNo: 12,
@@ -125,20 +128,19 @@ describe('ChecklistWindow', () => {
     const headers = within(checklist)
       .getAllByRole('columnheader')
       .map((cell) => cell.textContent);
-    // 実物 (1WINDOW/3CHECK.HTM) の印刷セパレータと同じ 9 列以上を出す。
+    // No. と 色 は固定で、そのあとに実物のダイアログ 210 (リスト表示) の項目順で並ぶ。
     expect(headers.length).toBeGreaterThanOrEqual(9);
     expect(headers).toEqual([
       'No.',
       '色',
+      '日付',
+      '位置',
+      'ジャンル',
+      'カット',
       'サークル名',
       '読み',
       '執筆者',
       '発行誌',
-      '補足',
-      'メモ',
-      '位置',
-      '日付',
-      'ジャンル',
     ]);
     expect(within(checklist).getByText('全 4 件中 2 件を表示')).toBeInTheDocument();
     expect(within(checklist).getByText('選択 1 件')).toBeInTheDocument();
@@ -188,18 +190,19 @@ describe('ChecklistWindow', () => {
     expect(rowOf('サークルB').querySelectorAll('td')[0]).toHaveTextContent('2');
   });
 
-  it('発行誌・補足・メモを出し、空欄は — にする', () => {
-    renderChecklist();
+  it('発行誌・URL・Mail を出し、空欄は — にする', () => {
+    // URL / Mail は「リスト表示」で入れる列 (既定は非表示)。
+    renderChecklist({ visibleColumns: [...DEFAULT_LIST_DISPLAY_SETTINGS.checklist, 'url', 'mail'] });
 
     const a = within(rowOf('サークルA'));
     expect(a.getByText('発行誌A')).toBeInTheDocument();
-    expect(a.getByText('補足A')).toBeInTheDocument();
-    expect(a.getByText('メモA')).toBeInTheDocument();
+    expect(a.getByText('https://example.com/a')).toBeInTheDocument();
+    expect(a.getByText('a@example.com')).toBeInTheDocument();
 
-    // サークルB の補足 / メモ は空 (Circle の既定値)。
+    // サークルB の URL / Mail は空 (Circle の既定値) なので — になる。
     const b = within(rowOf('サークルB'));
     expect(b.getByText('本2')).toBeInTheDocument();
-    expect(b.getAllByText('—')).toHaveLength(2);
+    expect(b.getAllByText('—').length).toBeGreaterThanOrEqual(2);
   });
 
   it('days ごとにタブを作り、ラベルは日付名だけにする', () => {

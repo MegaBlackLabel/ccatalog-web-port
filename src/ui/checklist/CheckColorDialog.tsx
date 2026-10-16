@@ -18,11 +18,11 @@ export type CheckColorDialogProps = {
 const BODY_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 8,
-  padding: 6,
   flex: '1 1 auto',
   minHeight: 0,
-  overflow: 'auto',
+  // ウィンドウ (510x577) に収まる寸法で組むので、本文のスクロールは出さない。
+  overflow: 'hidden',
+  padding: 6,
   fontSize: 12,
 };
 
@@ -42,7 +42,8 @@ const BUTTON_ROW_STYLE: CSSProperties = {
   display: 'flex',
   justifyContent: 'flex-end',
   gap: 6,
-  padding: '0 6px 6px',
+  // 実測: プロパティシートのボタン行はタブ ページの下端から 8px。
+  padding: '8px 6px 6px',
   flex: '0 0 auto',
 };
 
@@ -54,8 +55,9 @@ const BUTTON_ROW_STYLE: CSSProperties = {
  * 「チェック色」、下部に OK / キャンセル / 適用(A) を並べる (「閉じる」ではない)。
  * 編集はその場では反映せず、OK / 適用(A) で確定し、キャンセルで捨てる。
  *
- * ウィンドウの寸法はダイアログ 149 の資源寸法 404 x 375 (ダイアログ単位) に、
- * 動作設定 (411 x 452 → 実測 439 x 670) と同じ比率を当てた 431 x 577。
+ * ウィンドウの幅は動作設定 (510px) に揃える。高さは実物のチェック色ページ
+ * (250 DLU × 1.85 = 462px) にタブ行とボタン行 (動作設定と同じ 113px) を足した 575 相当の
+ * 577。サイズ変更不可 (app.css でリサイズ ハンドルを消す)、本文のスクロールも出さない。
  */
 export function CheckColorDialog({
   checkColors,
@@ -63,7 +65,8 @@ export function CheckColorDialog({
   onClose,
   initialX = 300,
   initialY = 40,
-  width = 431,
+  // 幅は動作設定 (プロパティシート) と同じ 510、高さは実物のページ + タブ行 + ボタン行。
+  width = 510,
   height = 577,
   zIndex,
 }: CheckColorDialogProps) {

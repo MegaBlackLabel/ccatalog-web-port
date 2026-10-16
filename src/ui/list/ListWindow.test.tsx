@@ -111,10 +111,13 @@ function renderList(overrides: Partial<ListWindowProps> = {}) {
 
 /** リストに出ているサークル名 (ヘッダー行を除く)。 */
 function listedNames(list: HTMLElement): string[] {
+  // 先頭の列は「リスト表示」の設定で変わるので、サークル名の列をヘッダーから探す。
+  const headers = within(list).getAllByRole('columnheader');
+  const nameIndex = headers.findIndex((cell) => cell.textContent === 'サークル名');
   return within(list)
     .getAllByRole('row')
     .slice(1)
-    .map((row) => row.querySelector('td')?.textContent ?? '');
+    .map((row) => row.querySelectorAll('td')[nameIndex]?.textContent ?? '');
 }
 
 /** 指定した文字列を含むリストの行。 */
@@ -193,14 +196,16 @@ describe('ListWindow', () => {
     const { list } = renderList();
 
     expect(within(list).getByText('サークル一覧')).toBeInTheDocument();
+    // 並びは実物のダイアログ 210 (リスト表示) の項目順。
     expect(within(list).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+      '日付',
+      '位置',
+      'ジャンル',
+      'カット',
       'サークル名',
       '読み',
       '執筆者',
       '発行誌',
-      '位置',
-      '日付',
-      'ジャンル',
     ]);
     expect(within(list).getByText('該当 2 件')).toBeInTheDocument();
     expect(within(list).getByText('表示 2 件')).toBeInTheDocument();

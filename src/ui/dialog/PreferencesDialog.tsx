@@ -7,7 +7,12 @@ import type {
   ListColumnKey,
   ListDisplaySettings,
 } from '../../domain/app-settings';
-import { DEFAULT_APP_SETTINGS, DEFAULT_LIST_DISPLAY_SETTINGS, LIST_COLUMN_LABELS } from '../../domain/app-settings';
+import {
+  DEFAULT_APP_SETTINGS,
+  DEFAULT_LIST_DISPLAY_SETTINGS,
+  LIST_COLUMN_LABELS,
+  LIST_COLUMN_ORDER,
+} from '../../domain/app-settings';
 import { CheckColorEditor } from '../checklist/CheckColorEditor';
 
 export type PreferencesDialogProps = {
@@ -24,7 +29,7 @@ export type PreferencesDialogProps = {
   onImagePathChange: (patch: Partial<ImagePathSettings>) => void;
   onListDisplayChange: (patch: Partial<ListDisplaySettings>) => void;
   onCheckColorsChange: (patch: Partial<CheckColorSettings>) => void;
-  /** 動作オプションの「設定を初期化」(1720)。 */
+  /** 動作オプションの「設定を初期化(D)」(1720)。 */
   onReset: () => void;
   onClose: () => void;
   initialX?: number;
@@ -39,7 +44,9 @@ export type PreferencesDialogProps = {
  * 「動作設定ダイアログは、プロパティシート式になっており、以下のグループ（ページ）に分かれています。
  *  ① 動作オプション ② 画像データパス ③ リスト表示 ④ 色の設定」
  *
- * ウィンドウの寸法は実測 (`解析/UI-SPEC.md` 6.1: 動作設定 (101,5) 439 x 670) に合わせる。
+ * ページの大きさは実物の最大ページ (動作オプション 235x301 DLU) に合わせる。実測の換算は
+ * x = 1.75 / y = 1.85 px/DLU (このプロパティシートのフォントは MS UI Gothic 9pt 相当で、
+ * 実機キャプチャの 12 DLU ピッチ = 22px / 17 DLU のスウォッチ幅 = 30px から求めた)。
  */
 const TABS = [
   { id: 'option', label: '動作オプション' },
@@ -63,28 +70,57 @@ const BODY_STYLE: CSSProperties = {
   flexDirection: 'column',
   flex: '1 1 auto',
   minHeight: 0,
+  // ウィンドウ (500x670) に収まる寸法で組むので、本文のスクロールは出さない。
+  overflow: 'hidden',
   padding: 6,
   fontSize: 12,
 };
 
-/** チェックボックス / ラジオボタンの縦並び。 */
-const CHOICE_COLUMN_STYLE: CSSProperties = {
+/** ページ (タブの中身)。実測: グループの左端は x=7、上端は y=13。 */
+const PAGE_STYLE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 2,
+  gap: 12,
+  padding: '13px 5px 8px',
+  flex: '1 1 auto',
+  minHeight: 0,
+  overflow: 'hidden',
 };
 
-const ROW_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 4,
+/**
+ * 元実装のグループ枠 (fieldset) はコントロールの位置がそのまま入る詰めた枠なので、
+ * ライブラリの既定の余白を外して中身の高さに合わせる。
+ * 実測: 見出しとチェックはグループ内の左端から 15px (クライアント x=24)。
+ */
+const GROUP_STYLE: CSSProperties = {
+  flex: '0 0 auto',
+  padding: '4px 4px 4px 12px',
+  margin: 0,
 };
 
-const FIELD_ROW_STYLE: CSSProperties = {
+/** 実測: チェックボックス / ラジオの行は 12 DLU = 22px ピッチ。 */
+const CHOICE_ROW_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 4,
-  paddingLeft: 18,
+  height: 22,
+  gap: 6,
+};
+
+const CHOICE_COLUMN_STYLE: CSSProperties = { display: 'flex', flexDirection: 'column' };
+
+const ROW_STYLE: CSSProperties = { display: 'flex', alignItems: 'center', gap: 4 };
+
+const SPACER_STYLE: CSSProperties = { flex: '1 1 auto' };
+
+/** 長いラベルが折り返さないようにする (実物も 1 行)。 */
+const NOWRAP_STYLE: CSSProperties = { whiteSpace: 'nowrap' };
+
+/** リストの移動ボタン (実物 42x14 DLU = 74x26)。ライブラリの左右 12px の余白は詰める。 */
+const MOVE_BUTTON_STYLE: CSSProperties = {
+  ...NOWRAP_STYLE,
+  width: 74,
+  minWidth: 74,
+  padding: '0 2px',
 };
 
 const BUTTON_ROW_STYLE: CSSProperties = {
@@ -94,33 +130,13 @@ const BUTTON_ROW_STYLE: CSSProperties = {
   flex: '0 0 auto',
 };
 
-/** プロパティシート下部のボタン行 (実物は右端揃えの OK / キャンセル / 適用(A))。 */
+/**
+ * プロパティシート下部のボタン行 (実物は右端揃えの OK / キャンセル / 適用(A))。
+ * 実測: タブ ページの下端とボタンの間に 8px の余白がある。
+ */
 const DIALOG_BUTTON_ROW_STYLE: CSSProperties = {
   ...BUTTON_ROW_STYLE,
-  justifyContent: 'flex-end',
-  padding: '0 6px 6px',
-};
-
-/** 文字ボタン。狭い行に置いても文字が折り返さないようにする (高さは 98.css のまま)。 */
-const TEXT_BUTTON_STYLE: CSSProperties = {
-  flex: '0 0 auto',
-  whiteSpace: 'nowrap',
-};
-
-/** ページ下部の行 (説明文 + ボタン)。 */
-const FOOTER_ROW_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-end',
-  justifyContent: 'space-between',
-  gap: 8,
-  flex: '0 0 auto',
-};
-
-const NOTE_STYLE: CSSProperties = {
-  margin: 0,
-  color: '#404040',
-  // 元実装の静的テキストは 2 行の決め打ち (改行の位置も合わせる)。
-  whiteSpace: 'nowrap',
+  padding: '8px 6px 6px',
 };
 
 type PreferenceCheckProps = {
@@ -138,6 +154,7 @@ function PreferenceCheck({ controlId, label, checked, onToggle }: PreferenceChec
       id={`preferences-check-${controlId}`}
       data-ctrl-id={controlId}
       label={label}
+      style={NOWRAP_STYLE}
       checked={checked}
       onChange={(event) => onToggle(event.target.checked)}
     />
@@ -155,134 +172,257 @@ function OptionPage({
   onReset: () => void;
 }) {
   return (
-    <>
-      <GroupBox legend="画面の掴みスクロールの方式">
+    <div style={PAGE_STYLE}>
+      {/* 実測: 画面の掴みスクロールの方式 (4,7,225,50) = 394x92 */}
+      <GroupBox legend="画面の掴みスクロールの方式" style={{ ...GROUP_STYLE, height: 92 }}>
         <div style={CHOICE_COLUMN_STYLE}>
-          <OptionButton
-            id="preferences-scroll-adobe"
-            data-ctrl-id={1023}
-            name="preferences-scroll"
-            label="Adobe方式 （スペースキーを押しながらマウスドラッグ）"
-            checked={settings.scrollMode === 'adobe'}
-            onChange={() => onChange({ scrollMode: 'adobe' })}
-          />
-          <OptionButton
-            id="preferences-scroll-ie"
-            data-ctrl-id={1025}
-            name="preferences-scroll"
-            label="IE方式 （ホイールクリックでスクロールロック）"
-            checked={settings.scrollMode === 'ie'}
-            onChange={() => onChange({ scrollMode: 'ie' })}
-          />
-          <OptionButton
-            id="preferences-scroll-drag"
-            data-ctrl-id={1027}
-            name="preferences-scroll"
-            label="マウスドラッグのみで掴みスクロール"
-            checked={settings.scrollMode === 'drag'}
-            onChange={() => onChange({ scrollMode: 'drag' })}
-          />
+          <div style={CHOICE_ROW_STYLE}>
+            <OptionButton
+              id="preferences-scroll-adobe"
+              data-ctrl-id={1023}
+              name="preferences-scroll"
+              label="Adobe方式(A) （スペースキーを押しながらマウスドラッグ）"
+              checked={settings.scrollMode === 'adobe'}
+              onChange={() => onChange({ scrollMode: 'adobe' })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <OptionButton
+              id="preferences-scroll-ie"
+              data-ctrl-id={1025}
+              name="preferences-scroll"
+              label="IE方式(E) （ホイールクリックでスクロールロック）"
+              checked={settings.scrollMode === 'ie'}
+              onChange={() => onChange({ scrollMode: 'ie' })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <OptionButton
+              id="preferences-scroll-drag"
+              data-ctrl-id={1027}
+              name="preferences-scroll"
+              label="マウスドラッグのみで掴みスクロール(R)"
+              checked={settings.scrollMode === 'drag'}
+              onChange={() => onChange({ scrollMode: 'drag' })}
+            />
+          </div>
         </div>
       </GroupBox>
-      <GroupBox legend="カーソル移動">
+
+      {/* 実測: カーソル移動 (4,64,225,72) = 394x133 */}
+      <GroupBox legend="カーソル移動" style={{ ...GROUP_STYLE, height: 133 }}>
         <div style={CHOICE_COLUMN_STYLE}>
-          <PreferenceCheck
-            controlId={1021}
-            label="リターンキーでチェック時、カーソルを自動で次のサークルに移動"
-            checked={settings.enterMovesCursor}
-            onToggle={(checked) => onChange({ enterMovesCursor: checked })}
-          />
-          <PreferenceCheck
-            controlId={1029}
-            label="テンキーでチェック時、カーソルを自動で次のサークルに移動"
-            checked={settings.tenkeyMovesCursor}
-            onToggle={(checked) => onChange({ tenkeyMovesCursor: checked })}
-          />
-          <PreferenceCheck
-            controlId={1710}
-            label="ページ変更時に常に左上のサークルカットにカーソルを合わせる"
-            checked={settings.cursorToTopLeftOnPageChange}
-            onToggle={(checked) => onChange({ cursorToTopLeftOnPageChange: checked })}
-          />
-          <PreferenceCheck
-            controlId={1024}
-            label="選択カーソルをマウスカーソルに追従する"
-            checked={settings.cursorFollowsMouse}
-            onToggle={(checked) => onChange({ cursorFollowsMouse: checked })}
-          />
-          <PreferenceCheck
-            controlId={1022}
-            label="選択サークルのブロックが変わった際にサークル一覧の表示も追従する"
-            checked={settings.listFollowsBlock}
-            onToggle={(checked) => onChange({ listFollowsBlock: checked })}
-          />
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1021}
+              label="リターンキーでチェック時、カーソルを自動で次のサークルに移動 (N)"
+              checked={settings.enterMovesCursor}
+              onToggle={(checked) => onChange({ enterMovesCursor: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1029}
+              label="テンキーでチェック時、カーソルを自動で次のサークルに移動 (M)"
+              checked={settings.tenkeyMovesCursor}
+              onToggle={(checked) => onChange({ tenkeyMovesCursor: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1710}
+              label="ページ変更時に常に左上のサークルカットにカーソルを合わせる (U)"
+              checked={settings.cursorToTopLeftOnPageChange}
+              onToggle={(checked) => onChange({ cursorToTopLeftOnPageChange: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1024}
+              label="選択カーソルをマウスカーソルに追従する (T)"
+              checked={settings.cursorFollowsMouse}
+              onToggle={(checked) => onChange({ cursorFollowsMouse: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1022}
+              label="選択サークルのブロックが変わった際にサークル一覧の表示も追従する (L)"
+              checked={settings.listFollowsBlock}
+              onToggle={(checked) => onChange({ listFollowsBlock: checked })}
+            />
+          </div>
         </div>
       </GroupBox>
-      <GroupBox legend="データ読み込み">
+
+      {/* 実測: データ読み込み (4,141,225,63) = 394x117 */}
+      <GroupBox legend="データ読み込み" style={{ ...GROUP_STYLE, height: 117 }}>
         <div style={CHOICE_COLUMN_STYLE}>
-          <PreferenceCheck
-            controlId={1664}
-            label="起動時に前回使用したチェックリストを自動的に読み込む"
-            checked={settings.loadLastChecklistOnStart}
-            onToggle={(checked) => onChange({ loadLastChecklistOnStart: checked })}
-          />
-          <PreferenceCheck
-            controlId={1028}
-            label="過去のチェックリスト読み込み時、サークル名チェックを厳密に行う"
-            checked={settings.strictCircleNameCheck}
-            onToggle={(checked) => onChange({ strictCircleNameCheck: checked })}
-          />
-          <PreferenceCheck
-            controlId={1712}
-            label="読み込み時にサークルメモを上書きする"
-            checked={settings.overwriteMemoOnLoad}
-            onToggle={(checked) => onChange({ overwriteMemoOnLoad: checked })}
-          />
-          <PreferenceCheck
-            controlId={1713}
-            label="読み込み時にチェック色情報を上書きする"
-            checked={settings.overwriteColorOnLoad}
-            onToggle={(checked) => onChange({ overwriteColorOnLoad: checked })}
-          />
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1664}
+              label="起動時に前回使用したチェックリストを自動的に読み込む (P)"
+              checked={settings.loadLastChecklistOnStart}
+              onToggle={(checked) => onChange({ loadLastChecklistOnStart: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1028}
+              label="過去のチェックリスト読み込み時、サークル名チェックを厳密に行う (C)"
+              checked={settings.strictCircleNameCheck}
+              onToggle={(checked) => onChange({ strictCircleNameCheck: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1712}
+              label="読み込み時にサークルメモを上書きする(O)"
+              checked={settings.overwriteMemoOnLoad}
+              onToggle={(checked) => onChange({ overwriteMemoOnLoad: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1713}
+              label="読み込み時にチェック色情報を上書きする(W)"
+              checked={settings.overwriteColorOnLoad}
+              onToggle={(checked) => onChange({ overwriteColorOnLoad: checked })}
+            />
+          </div>
         </div>
       </GroupBox>
-      <GroupBox legend="その他">
+
+      {/* 実測: その他 (4,213,225,58) = 394x107 */}
+      <GroupBox legend="その他" style={{ ...GROUP_STYLE, height: 107 }}>
         <div style={CHOICE_COLUMN_STYLE}>
-          <PreferenceCheck
-            controlId={1714}
-            label="個別窓のアイコン化を連動する"
-            checked={settings.linkWindowIconify}
-            onToggle={(checked) => onChange({ linkWindowIconify: checked })}
-          />
-          <PreferenceCheck
-            controlId={1026}
-            label="シングルクリックでチェックする"
-            checked={settings.singleClickChecks}
-            onToggle={(checked) => onChange({ singleClickChecks: checked })}
-          />
-          <PreferenceCheck
-            controlId={1711}
-            label="起動時に表紙画像を表示する"
-            checked={settings.showCoverOnStart}
-            onToggle={(checked) => onChange({ showCoverOnStart: checked })}
-          />
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1714}
+              label="個別窓のアイコン化を連動する(I)"
+              checked={settings.linkWindowIconify}
+              onToggle={(checked) => onChange({ linkWindowIconify: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1026}
+              label="シングルクリックでチェックする (S)"
+              checked={settings.singleClickChecks}
+              onToggle={(checked) => onChange({ singleClickChecks: checked })}
+            />
+          </div>
+          <div style={CHOICE_ROW_STYLE}>
+            <PreferenceCheck
+              controlId={1711}
+              label="起動時に表紙画像を表示する (B)"
+              checked={settings.showCoverOnStart}
+              onToggle={(checked) => onChange({ showCoverOnStart: checked })}
+            />
+          </div>
         </div>
       </GroupBox>
+
       <div style={BUTTON_ROW_STYLE}>
         <Button
           data-testid="preferences-reset"
           data-ctrl-id={1720}
-          style={TEXT_BUTTON_STYLE}
+          style={{ ...NOWRAP_STYLE, width: 122 }}
           onClick={onReset}
         >
-          設定を初期化
+          設定を初期化(D)
         </Button>
       </div>
-    </>
+    </div>
   );
 }
 
-/** 画像データパス (ページ② 元ダイアログ 191 パス設定)。 */
+/** パス設定の 1 グループ (ラジオ 2 つ + 場所 + 参照)。元ダイアログ 191。 */
+function PathGroup({
+  legend,
+  autoControlId,
+  manualControlId,
+  autoLabel,
+  manualLabel,
+  placeLabel,
+  placeControlId,
+  placeAriaLabel,
+  value,
+  useAuto,
+  onAuto,
+  onPath,
+  browseTitle,
+}: {
+  legend: string;
+  autoControlId: number;
+  manualControlId: number;
+  autoLabel: string;
+  manualLabel: string;
+  placeLabel: string;
+  placeControlId: number;
+  /** 入力欄のアクセシブル名 (見出しは「場所(D) :」だが、何の場所かを残す)。 */
+  placeAriaLabel: string;
+  value: string;
+  useAuto: boolean;
+  onAuto: (auto: boolean) => void;
+  onPath: (value: string) => void;
+  browseTitle: string;
+}) {
+  return (
+    // 実測: 画像データパス (7,7,217,76) = 380x140
+    <GroupBox legend={legend} style={{ ...GROUP_STYLE, height: 140, padding: '4px 12px 4px 10px' }}>
+      <div style={CHOICE_COLUMN_STYLE}>
+        <div style={CHOICE_ROW_STYLE}>
+          <OptionButton
+            id={`preferences-path-auto-${autoControlId}`}
+            data-ctrl-id={autoControlId}
+            name={`preferences-path-${autoControlId}`}
+            label={autoLabel}
+            checked={useAuto}
+            onChange={() => onAuto(true)}
+          />
+        </div>
+        <div style={CHOICE_ROW_STYLE}>
+          <OptionButton
+            id={`preferences-path-manual-${manualControlId}`}
+            data-ctrl-id={manualControlId}
+            name={`preferences-path-${autoControlId}`}
+            label={manualLabel}
+            checked={!useAuto}
+            onChange={() => onAuto(false)}
+          />
+        </div>
+        {/* 実測: 場所(D) の見出しは x=42、エディットは x=112 の 266px。 */}
+        <div style={{ ...ROW_STYLE, paddingLeft: 18, paddingTop: 2 }}>
+          <span style={{ ...NOWRAP_STYLE, flex: '0 0 70px' }}>{placeLabel}</span>
+          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+            <TextBox
+              aria-label={placeAriaLabel}
+              data-ctrl-id={placeControlId}
+              style={{ flex: '1 1 auto', minWidth: 0 }}
+              value={value}
+              disabled={useAuto}
+              onChange={(event) => onPath(event.target.value)}
+            />
+          </div>
+        </div>
+        {/* 実測: 参照(C)... はエディットの下に右寄せ (166,61,50,14) = x=290 の 88px。 */}
+        <div style={{ ...BUTTON_ROW_STYLE, paddingTop: 2 }}>
+          <Button
+            data-ctrl-id={placeControlId === 1614 ? 1616 : 1734}
+            style={{ ...NOWRAP_STYLE, width: 88 }}
+            disabled
+            title={browseTitle}
+          >
+            参照(C)...
+          </Button>
+        </div>
+      </div>
+    </GroupBox>
+  );
+}
+
+/** 画像データパス / ブラウザ指定 (ページ② 元ダイアログ 191 パス設定)。 */
 function ImagePathPage({
   imagePath,
   onChange,
@@ -291,133 +431,38 @@ function ImagePathPage({
   onChange: (patch: Partial<ImagePathSettings>) => void;
 }) {
   return (
-    <>
-      <GroupBox legend="画像データパス">
-        <div style={CHOICE_COLUMN_STYLE}>
-          <OptionButton
-            id="preferences-image-auto"
-            data-ctrl-id={1612}
-            name="preferences-image"
-            label="自動検索する"
-            checked={imagePath.autoSearch}
-            onChange={() => onChange({ autoSearch: true })}
-          />
-          <OptionButton
-            id="preferences-image-manual"
-            data-ctrl-id={1613}
-            name="preferences-image"
-            label="指定場所から読み込む"
-            checked={!imagePath.autoSearch}
-            onChange={() => onChange({ autoSearch: false })}
-          />
-          <div style={FIELD_ROW_STYLE}>
-            <span>場所 :</span>
-            <TextBox
-              aria-label="画像データの場所"
-              data-ctrl-id={1614}
-              style={{ flex: '1 1 auto' }}
-              value={imagePath.basePath}
-              disabled={imagePath.autoSearch}
-              onChange={(event) => onChange({ basePath: event.target.value })}
-            />
-            <Button disabled title="Web 版ではフォルダを参照できません (URL を直接入力)" data-ctrl-id={1616}>
-              参照...
-            </Button>
-          </div>
-        </div>
-      </GroupBox>
-      <GroupBox legend="ブラウザ指定">
-        <div style={CHOICE_COLUMN_STYLE}>
-          <OptionButton
-            id="preferences-browser-default"
-            data-ctrl-id={1730}
-            name="preferences-browser"
-            label="標準"
-            checked={imagePath.useDefaultBrowser}
-            onChange={() => onChange({ useDefaultBrowser: true })}
-          />
-          <OptionButton
-            id="preferences-browser-custom"
-            data-ctrl-id={1731}
-            name="preferences-browser"
-            label="ブラウザを指定"
-            checked={!imagePath.useDefaultBrowser}
-            onChange={() => onChange({ useDefaultBrowser: false })}
-          />
-          <div style={FIELD_ROW_STYLE}>
-            <span>場所 :</span>
-            <TextBox
-              aria-label="ブラウザの場所"
-              data-ctrl-id={1733}
-              style={{ flex: '1 1 auto' }}
-              value={imagePath.browserPath}
-              disabled={imagePath.useDefaultBrowser}
-              onChange={(event) => onChange({ browserPath: event.target.value })}
-            />
-            <Button disabled title="Web 版では実行ファイルを参照できません" data-ctrl-id={1734}>
-              参照...
-            </Button>
-          </div>
-        </div>
-      </GroupBox>
-      <p style={NOTE_STYLE}>
-        ※ Web 版は画像データとブラウザの場所を URL / パスとして使い、フォルダ・実行ファイルの参照はできません。
-      </p>
-    </>
-  );
-}
-
-/** リスト表示 (ページ③ 元ダイアログ 210)。列の表示と並び (上が左の列)。 */
-function ListPage({
-  listDisplay,
-  onChange,
-}: {
-  listDisplay: ListDisplaySettings;
-  onChange: (patch: Partial<ListDisplaySettings>) => void;
-}) {
-  return (
-    <>
-      <div style={{ display: 'flex', gap: 8, flex: '1 1 auto', minHeight: 0 }}>
-        <ColumnList
-          legend="チェックリスト 表示項目"
-          controlId={1694}
-          prevLabel="前へ移動"
-          prevControlId={1695}
-          nextLabel="後へ移動"
-          nextControlId={1696}
-          keys={DEFAULT_LIST_DISPLAY_SETTINGS.checklist}
-          visible={listDisplay.checklist}
-          onChange={(next) => onChange({ checklist: next })}
-        />
-        <ColumnList
-          legend="サークル一覧 表示項目"
-          controlId={1697}
-          prevLabel="前へ移動"
-          prevControlId={1698}
-          nextLabel="後へ移動"
-          nextControlId={1699}
-          keys={DEFAULT_LIST_DISPLAY_SETTINGS.list}
-          visible={listDisplay.list}
-          onChange={(next) => onChange({ list: next })}
-        />
-      </div>
-      <div style={FOOTER_ROW_STYLE}>
-        {/* 元実装の静的テキスト (14,213) 217 x 27 = 2 行。改行の位置も実物に合わせる。 */}
-        <p data-testid="preferences-list-note" style={NOTE_STYLE}>
-          ※ 「サークル名」を非表示にすることは
-          <br />
-          できません.
-        </p>
-        <Button
-          data-ctrl-id={1700}
-          data-testid="preferences-list-default"
-          style={TEXT_BUTTON_STYLE}
-          onClick={() => onChange({ ...DEFAULT_LIST_DISPLAY_SETTINGS })}
-        >
-          デフォルトに戻す
-        </Button>
-      </div>
-    </>
+    <div style={PAGE_STYLE}>
+      <PathGroup
+        legend="画像データパス"
+        autoControlId={1612}
+        manualControlId={1613}
+        autoLabel="自動検索する(F)"
+        manualLabel="指定場所から読み込む(R)"
+        placeLabel="場所(D) :"
+        placeControlId={1614}
+        placeAriaLabel="画像データの場所"
+        value={imagePath.basePath}
+        useAuto={imagePath.autoSearch}
+        onAuto={(auto) => onChange({ autoSearch: auto })}
+        onPath={(value) => onChange({ basePath: value })}
+        browseTitle="Web 版ではフォルダを参照できません (URL を直接入力)"
+      />
+      <PathGroup
+        legend="ブラウザ指定"
+        autoControlId={1730}
+        manualControlId={1731}
+        autoLabel="標準(S)"
+        manualLabel="ブラウザを指定(B)"
+        placeLabel="場所(E) :"
+        placeControlId={1733}
+        placeAriaLabel="ブラウザの場所"
+        value={imagePath.browserPath}
+        useAuto={imagePath.useDefaultBrowser}
+        onAuto={(auto) => onChange({ useDefaultBrowser: auto })}
+        onPath={(value) => onChange({ browserPath: value })}
+        browseTitle="Web 版では実行ファイルを参照できません"
+      />
+    </div>
   );
 }
 
@@ -429,7 +474,6 @@ function ColumnList({
   prevControlId,
   nextLabel,
   nextControlId,
-  keys,
   visible,
   onChange,
 }: {
@@ -439,17 +483,17 @@ function ColumnList({
   prevControlId: number;
   nextLabel: string;
   nextControlId: number;
-  /** 選べる列 (既定の並び)。 */
-  keys: readonly ListColumnKey[];
   /** 表示中の列 (表示順)。 */
   visible: readonly ListColumnKey[];
   onChange: (next: ListColumnKey[]) => void;
 }) {
-  const [selected, setSelected] = useState<ListColumnKey | null>(null);
-  const index = selected === null ? -1 : visible.indexOf(selected);
-  // 一覧は「表示中の列 (表示順) → チェックの外れた列」の順に描く。
+  // 一覧は「表示中の列 (表示順) → チェックの外れた列 (実物の並び)」の順に描く。
   // こうしないと、前へ / 後へ移動で visible を並べ替えても表示が変わらない。
-  const ordered = [...visible, ...keys.filter((key) => !visible.includes(key))];
+  const hidden = LIST_COLUMN_ORDER.filter((key) => !visible.includes(key));
+  const ordered = [...visible, ...hidden];
+  // 実物のリストは常に 1 項目が選ばれている (最初は先頭)。端でだけ移動ボタンが無効。
+  const [selected, setSelected] = useState<ListColumnKey | null>(ordered[0] ?? null);
+  const index = selected === null ? -1 : visible.indexOf(selected);
 
   const move = (delta: number) => {
     const target = index + delta;
@@ -460,19 +504,40 @@ function ColumnList({
   };
 
   return (
-    <GroupBox legend={legend} style={{ flex: '1 1 0', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-      <div data-ctrl-id={controlId} style={{ ...CHOICE_COLUMN_STYLE, flex: '1 1 auto', overflow: 'auto' }}>
+    // 実測: チェックリスト 表示項目 (7,7,103,127) = 180x235。見出し
+    // (「チェックリスト 表示項目 (C)」) が折り返さないよう幅はページに合わせる。
+    <GroupBox legend={legend} style={{ ...GROUP_STYLE, width: 214, height: 235, padding: '4px 4px 4px 10px' }}>
+      <div
+        data-ctrl-id={controlId}
+        className="sunken-panel"
+        style={{
+          ...CHOICE_COLUMN_STYLE,
+          // 実測: リスト領域は 88x92 DLU = 154x170 (項目が増えるとスクロールする)。
+          width: 154,
+          height: 170,
+          background: 'transparent',
+          overflow: 'auto',
+        }}
+      >
         {ordered.map((key) => (
           <div
             key={key}
             data-testid={`column-row-${key}`}
             // 行のクリックで選ぶ (チェックボックスの入れ外しとは別。実物のリストボックスと同じ)。
             onClick={() => setSelected(key)}
-            style={{ ...ROW_STYLE, background: key === selected ? '#000080' : undefined }}
+            style={{
+              ...ROW_STYLE,
+              // 行は縮めない (入りきらない分はリストの中でスクロールする)。
+              flex: '0 0 auto',
+              height: 17,
+              paddingLeft: 2,
+              background: key === selected ? '#000080' : undefined,
+            }}
           >
             <Checkbox
               id={`preferences-column-${key}`}
               label={LIST_COLUMN_LABELS[key]}
+              style={NOWRAP_STYLE}
               checked={visible.includes(key)}
               //「サークル名」は非表示にできない (5LIST.HTM)。
               disabled={key === 'name'}
@@ -488,10 +553,11 @@ function ColumnList({
           </div>
         ))}
       </div>
-      <div style={{ ...BUTTON_ROW_STYLE, justifyContent: 'flex-start' }}>
+      {/* 実測: 前へ移動 (15,115,42,14) = 74x26 が 2 つ (文字がはみ出さない幅)。 */}
+      <div style={{ ...BUTTON_ROW_STYLE, justifyContent: 'flex-start', gap: 5, paddingTop: 8 }}>
         <Button
           data-ctrl-id={prevControlId}
-          style={TEXT_BUTTON_STYLE}
+          style={MOVE_BUTTON_STYLE}
           disabled={index <= 0}
           onClick={() => move(-1)}
         >
@@ -499,7 +565,7 @@ function ColumnList({
         </Button>
         <Button
           data-ctrl-id={nextControlId}
-          style={TEXT_BUTTON_STYLE}
+          style={MOVE_BUTTON_STYLE}
           disabled={index < 0 || index >= visible.length - 1}
           onClick={() => move(1)}
         >
@@ -507,6 +573,59 @@ function ColumnList({
         </Button>
       </div>
     </GroupBox>
+  );
+}
+
+/** リスト表示 (ページ③ 元ダイアログ 210)。列の表示と並び (上が左の列)。 */
+function ListPage({
+  listDisplay,
+  onChange,
+}: {
+  listDisplay: ListDisplaySettings;
+  onChange: (patch: Partial<ListDisplaySettings>) => void;
+}) {
+  return (
+    <div style={PAGE_STYLE}>
+      <div style={{ display: 'flex', gap: 18, flex: '0 0 auto' }}>
+        <ColumnList
+          legend="チェックリスト 表示項目 (C)"
+          controlId={1694}
+          prevLabel="前へ移動(F)"
+          prevControlId={1695}
+          nextLabel="後へ移動(B)"
+          nextControlId={1696}
+          visible={listDisplay.checklist}
+          onChange={(next) => onChange({ checklist: next })}
+        />
+        <ColumnList
+          legend="サークル一覧 表示項目 (L)"
+          controlId={1697}
+          prevLabel="前へ移動(P)"
+          prevControlId={1698}
+          nextLabel="後へ移動(N)"
+          nextControlId={1699}
+          visible={listDisplay.list}
+          onChange={(next) => onChange({ list: next })}
+        />
+      </div>
+      {/* 実測: 注記 (8,142,124,18) = 217x33 (2 行)、デフォルトに戻す (160,141,63,14)。 */}
+      <div style={{ ...ROW_STYLE, alignItems: 'flex-start', gap: 8 }}>
+        <p data-testid="preferences-list-note" style={{ margin: 0, color: '#404040', whiteSpace: 'nowrap' }}>
+          ※「サークル名」を非表示にすることは
+          <br />
+          できません.
+        </p>
+        <span style={SPACER_STYLE} />
+        <Button
+          data-ctrl-id={1700}
+          data-testid="preferences-list-default"
+          style={{ ...NOWRAP_STYLE, width: 110 }}
+          onClick={() => onChange({ ...DEFAULT_LIST_DISPLAY_SETTINGS })}
+        >
+          デフォルトに戻す(D)
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -524,10 +643,11 @@ export function PreferencesDialog({
   onClose,
   initialX = 210,
   initialY = 30,
-  // 実測 (`解析/UI-SPEC.md` 6.1) の 動作設定 439 x 670。幅は、動作オプションの長いラベル
-  // (「選択サークルのブロックが変わった際にサークル一覧の表示も追従する」) が折り返さないよう
-  // 少し広げている。
-  width = 487,
+  // 実測 (`解析/UI-SPEC.md` 6.1) の 動作設定 439 x 670。高さはそのまま (ページの内寸
+  // 557px = 動作オプションの 301 DLU × 1.85)、幅は実物の 439 だと日本語ラベルが折り返す
+  // (「選択サークルのブロックが変わった際に… (L)」の描画幅がチェック印込みで 426px で、
+  // 実物の 217 DLU = 380px より 12% 広い)。折り返さない幅にする。
+  width = 510,
   height = 670,
   zIndex,
 }: PreferencesDialogProps) {
@@ -581,6 +701,7 @@ export function PreferencesDialog({
   };
 
   return (
+    // 実物と同じくサイズ変更不可 (app.css でリサイズ ハンドルを消す)。本文のスクロールも出さない。
     <Window
       data-testid="preferences-dialog"
       title="動作設定"

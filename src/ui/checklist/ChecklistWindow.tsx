@@ -14,6 +14,7 @@ import type { TabItem, TableColumn } from '@megablacklabel/react98retro';
 import type { CheckColor, ChecklistEntry, ChecklistSortColumn } from '../../app/catalog-state';
 import { checkColorHex, checkColorPalette, checkSwatchIcon } from '../check-colors';
 import { DEFAULT_LIST_DISPLAY_SETTINGS, type ListColumnKey } from '../../domain/app-settings';
+import { assetUrl } from '../asset-url';
 // 実物のツールバー アイコン (PE の RT_BITMAP を SVG 化したもの) をそのまま使う。
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
 import {
@@ -87,13 +88,13 @@ export type ChecklistListRow = {
   pen: string;
   /** 発行誌 (DB の bookName)。 */
   book: string;
-  /** 補足 (DB の description)。 */
-  description: string;
-  /** サークルメモ (DB の memo)。 */
-  memo: string;
   space: string;
   day: string;
   genre: string;
+  /** URL (DB の url)。 */
+  url: string;
+  /** Mail (DB の mailAddr)。 */
+  mail: string;
 };
 
 /** チェック色の見本色 (0 は標準色 = 緑)。定義は 5 ウィンドウ共通 (ui/check-colors.ts)。 */
@@ -118,11 +119,34 @@ const CHECKLIST_COLUMN_DEFS: Record<Exclude<ListColumnKey, 'color'>, TableColumn
   kana: { key: 'kana', header: '読み', width: 110 },
   pen: { key: 'pen', header: '執筆者', width: 120 },
   book: { key: 'book', header: '発行誌', width: 160 },
-  description: { key: 'description', header: '補足', width: 120, render: (value) => renderText(value) },
-  memo: { key: 'memo', header: 'メモ', width: 120, render: (value) => renderText(value) },
   space: { key: 'space', header: '位置', width: 60 },
   day: { key: 'day', header: '日付', width: 70 },
   genre: { key: 'genre', header: 'ジャンル', width: 110 },
+  url: { key: 'url', header: 'URL', width: 160, render: (value) => renderText(value) },
+  mail: { key: 'mail', header: 'Mail', width: 160, render: (value) => renderText(value) },
+  cut: {
+    key: 'circleId',
+    header: 'カット',
+    width: 60,
+    render: (_value, row) => (
+      <img
+        data-testid="checklist-cut"
+        src={assetUrl(`/cuts/${row.circleId}.png`)}
+        alt=""
+        draggable={false}
+        style={CUT_STYLE}
+      />
+    ),
+  },
+};
+
+/** カット列の画像 (リスト表示の「サークルカット」)。 */
+const CUT_STYLE: CSSProperties = {
+  display: 'block',
+  width: 48,
+  height: 32,
+  objectFit: 'contain',
+  imageRendering: 'pixelated',
 };
 
 /**
@@ -234,11 +258,11 @@ export function ChecklistWindow({
     kana: circle.circleKana,
     pen: circle.penName,
     book: circle.bookName,
-    description: circle.description,
-    memo: circle.memo,
     space: `${circle.spaceNo}${circle.spaceNoSub === 1 ? 'b' : 'a'}`,
     day: circle.day === 0 ? '抽選漏れ' : `${circle.day}日目`,
     genre: genreName,
+    url: circle.url,
+    mail: circle.mailAddr,
   }));
 
   const hasSelection = selectedIds.length > 0;

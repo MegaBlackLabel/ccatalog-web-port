@@ -269,13 +269,6 @@ export function ListWindow({
     kana: { key: 'circleKana', header: '読み', width: 110 },
     pen: { key: 'penName', header: '執筆者', width: 140 },
     book: { key: 'bookName', header: '発行誌', width: 150 },
-    description: {
-      key: 'description',
-      header: '補足',
-      width: 140,
-      render: (_value, row) => (row.description === '' ? '—' : row.description),
-    },
-    memo: { key: 'memo', header: 'メモ', width: 140, render: (_value, row) => (row.memo === '' ? '—' : row.memo) },
     space: {
       key: 'spaceNo',
       header: '位置',
@@ -294,11 +287,38 @@ export function ListWindow({
       width: 130,
       render: (_value, row) => genreNames[row.genreId] ?? String(row.genreId),
     },
+    url: {
+      key: 'url',
+      header: 'URL',
+      width: 160,
+      render: (_value, row) => (row.url === '' ? '—' : row.url),
+    },
+    mail: {
+      key: 'mailAddr',
+      header: 'Mail',
+      width: 160,
+      render: (_value, row) => (row.mailAddr === '' ? '—' : row.mailAddr),
+    },
+    cut: {
+      key: 'circleId',
+      header: 'カット',
+      width: 60,
+      render: (_value, row) => (
+        <img
+          data-testid="list-cut"
+          src={assetUrl(`/cuts/${row.circleId}.png`)}
+          alt=""
+          draggable={false}
+          style={LIST_CUT_STYLE}
+        />
+      ),
+    },
   };
 
   const columns: readonly TableColumn<ListRow>[] = [
-    // 表示 > リスト中のカット表示 (32868) を入れると、行の先頭にカット画像の列が出る。
-    ...(showCuts
+    // 表示 > リスト中のカット表示 (32868) を入れると、行の先頭にカット画像の列が出る
+    // (「リスト表示」でサークルカットの列を出しているときは二重にしない)。
+    ...(showCuts && !visibleColumns.includes('cut')
       ? [
           {
             key: 'circleId' as const,
