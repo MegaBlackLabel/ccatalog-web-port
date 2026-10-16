@@ -30,9 +30,13 @@ jobs:
           bun-version: 1.3.11
 
       - name: Configure GitHub Packages
+        # レジストリの指定はリポジトリの .npmrc にあるので、実行時に足すのは認証だけ。
+        # bun は ~/.npmrc の _authToken を見ないため、プロジェクトの .npmrc にも書く
+        # (~/.npmrc 側だけだと 401 になる)。
         run: |
           echo "@megablacklabel:registry=https://npm.pkg.github.com" > ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}" >> .npmrc
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
