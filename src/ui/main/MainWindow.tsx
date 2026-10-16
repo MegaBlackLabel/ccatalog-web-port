@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import {
   Button,
   Dropdown,
@@ -11,7 +19,6 @@ import {
   ToolbarBand,
   ToolbarRow,
   Window,
-  useToolbarRows,
   useToolbarReorder,
 } from '@megablacklabel/react98retro';
 import type { ToolbarItemDef } from '@megablacklabel/react98retro';
@@ -159,6 +166,26 @@ function toolbarButton(
  * ドッキング ツールバーの継ぎ目は実物と同じ 2px にする。
  */
 const TOOLBAR_ROW_GAP = 2;
+
+/**
+ * ツールバーの段の初期値 (上から順)。実物の rebar の `RBBS_BREAK` 相当で、
+ * 段は幅では自動で折り返さない。ここを変えれば初期表示の段数が変わる。
+ */
+const INITIAL_TOOLBAR_ROWS: readonly (readonly string[])[] = [
+  ['basic', 'jump', 'view'],
+  ['check', 'nav'],
+];
+
+/** グループ id -> 段番号。 */
+function initialToolbarRows(): Record<string, number> {
+  const rows: Record<string, number> = {};
+  INITIAL_TOOLBAR_ROWS.forEach((ids, row) => {
+    ids.forEach((id) => {
+      rows[id] = row;
+    });
+  });
+  return rows;
+}
 
 /**
  * メニューバーとツールバー帯の境目。メニューバーの下辺は暗い線を持たず (銀の余白 1px)、
@@ -589,34 +616,41 @@ export function MainWindow({
   const shownBars = visibleBars ?? TOOLBAR_BARS.map((bar) => bar.id);
   const shownGroups = toolbarGroups.filter((group) => shownBars.includes(group.id));
 
-  // 実物のドッキング ツールバーと同じく、段に入りきらないグループは次の段へ回す。
-  // 幅はレイアウト後にしか分からないので、ライブラリの useToolbarRows が計測して詰める
-  // (計測できないときは 1 段のまま CSS の折り返しに任せる)。
-  const {
-    stripRef,
-    itemRefs: groupRefs,
-    rows: toolbarRows,
-  } = useToolbarRows({
-    count: shownGroups.length,
-    gap: TOOLBAR_ROW_GAP,
-    paddingX: TOOLBAR_PADDING_X,
-  });
-
   // ツールバーの並べ替え。順序はグループ id で持つので、表示 > ツールバー で
   // 出し入れしても保たれる (隠れているものは末尾に残す)。
   const [groupOrder, setGroupOrder] = useState<string[]>(() => TOOLBAR_BARS.map((bar) => bar.id));
+  // 段も明示的に持つ (幅では自動で折り返さない)。並べ替えで段をまたいだときだけ変わる。
+  const [groupRow, setGroupRow] = useState<Record<string, number>>(initialToolbarRows);
+
   const shownBarIds = new Set<string>(shownBars);
   const orderedGroups = groupOrder
     .filter((id) => shownBarIds.has(id))
     .map((id) => shownGroups.find((group) => group.id === id))
     .filter((group): group is (typeof shownGroups)[number] => group !== undefined);
 
+  // 段ごとの位置 (orderedGroups の index)。段は番号の小さい順に上から並ぶ。
+  const toolbarRows = useMemo(() => {
+    const byRow = new Map<number, number[]>();
+    orderedGroups.forEach((group, position) => {
+      const row = groupRow[group.id] ?? 0;
+      const positions = byRow.get(row);
+      if (positions) positions.push(position);
+      else byRow.set(row, [position]);
+    });
+    return [...byRow.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([row, positions]) => ({ row, positions }));
+  }, [orderedGroups, groupRow]);
+
+  const groupRefs = useRef<(HTMLElement | null)[]>([]);
+
   // 掴めるかどうか。固定したいグループはここで false にする (実物の rebar と同じく、
   // 固定したグループはグリップを描かないので掴めない)。
   const movableGroups = orderedGroups.map(() => true);
 
   const handleReorder = useCallback(
-    (from: number, to: number) => {
+    (from: number, to: number, row: number) => {
+      const movedId = orderedGroups[from]?.id;
       setGroupOrder((prev) => {
         const visible = prev.filter((id) => shownBarIds.has(id));
         const next = [...visible];
@@ -625,11 +659,17 @@ export function MainWindow({
         const hidden = prev.filter((id) => !shownBarIds.has(id));
         return [...next, ...hidden];
       });
+      // ドロップした段へ移す (段をまたいだときだけ変わる)
+      if (movedId !== undefined) {
+        setGroupRow((prev) => (prev[movedId] === row ? prev : { ...prev, [movedId]: row }));
+      }
     },
-    [shownBarIds],
+    [orderedGroups, shownBarIds],
   );
 
-  const { draggingIndex, dropIndex, getHandleProps, canReorder } = useToolbarReorder({
+  // ドラッグ中に実際へ並べ替える (実物の rebar と同じ)。段はここで決めているので、
+  // 見えている配置がそのまま結果になる (幅に入るかどうかで段が変わらない)。
+  const { draggingIndex, getHandleProps, canReorder } = useToolbarReorder({
     count: orderedGroups.length,
     movable: movableGroups,
     allowCrossRow: true,
@@ -716,20 +756,17 @@ export function MainWindow({
         {/* 元実装は 5 本のドッキング ツールバーで、入りきらない本は次の段へ回る。
             帯の外周の溝と、折り返した段と段の間の溝はライブラリの ToolbarBand が持つ。 */}
         <ToolbarBand
-          ref={stripRef}
           data-testid="main-toolbar"
-          rows={toolbarRows.map((row) => (
-            <ToolbarRow key={row[0]} data-testid="toolbar-row" style={TOOLBAR_ROW_LOCAL}>
-              {row.map((position) => {
+          rows={toolbarRows.map(({ row, positions }) => (
+            <ToolbarRow key={row} data-testid="toolbar-row" style={TOOLBAR_ROW_LOCAL}>
+              {positions.map((position) => {
                 const group = orderedGroups[position];
                 return (
                   <div
                     key={group.id}
                     data-testid={`toolbar-group-${group.id}`}
                     data-reorder-dragging={draggingIndex === position ? '' : undefined}
-                    data-reorder-drop={
-                      dropIndex === position && draggingIndex !== position ? '' : undefined
-                    }
+                    data-reorder-drop={draggingIndex === position ? '' : undefined}
                     ref={(element) => {
                       // 計測は「並び順の位置」で見るので、ref も位置で持つ
                       groupRefs.current[position] = element;
