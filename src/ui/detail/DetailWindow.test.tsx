@@ -56,13 +56,14 @@ const CIRCLE = makeCircle(7, {
 });
 
 /**
- * 実測値 (px)。カットの原寸は `解析/ui_capture/4-サークル詳細.png` と
- * `解析/ui_capture/analysis/img2-detail.txt` (細いウィンドウでも原寸) から。
+ * 実測値 (px)。カット欄は `解析/ui_capture/3-サークル詳細.png` と
+ * `解析/ui_capture/analysis/img2-detail.txt` (実物のカット域 x 7..221) から。
+ * 画像の原寸は catalog の cutSizeW/H の 178x253 で、欄いっぱいまで拡大される。
  */
-/** カット画像の原寸 (ComiketInfo.cutSizeW)。カット欄と枠もこの幅にする。 */
-const CUT_WIDTH = 178;
-/** カット画像の原寸高 (ComiketInfo.cutSizeH)。 */
-const CUT_HEIGHT = 253;
+/** カット欄の幅 (実物のカット域 x 7..221 と同じ 214px 固定)。 */
+const CUT_WIDTH = 214;
+/** カット欄の高さ (原寸 178x253 を幅 214 に合わせて拡大した値)。 */
+const CUT_HEIGHT = 304;
 
 /** 元実装のサークル詳細情報の並び。 */
 const INFO_LABELS = [
@@ -147,26 +148,26 @@ describe('DetailWindow', () => {
     expect(screen.getByText('サークル詳細 - SMYSLE')).toBeInTheDocument();
     const cut = within(detail).getByTestId('detail-cut-image');
     expect(cut).toHaveAttribute('src', '/cuts/7.png');
-    expect(cut).toHaveAttribute('width', '178');
-    expect(cut).toHaveAttribute('height', '253');
+    expect(cut).toHaveAttribute('width', String(CUT_WIDTH));
+    expect(cut).toHaveAttribute('height', String(CUT_HEIGHT));
     expect(within(detail).queryByTestId('detail-cut-placeholder')).toBeNull();
   });
 
-  it('カット欄と枠はカット画像の原寸 178x253 に合わせ、画像の周りに余白を出さない', () => {
+  it('カット欄と枠は実物と同じ 214x304 で、画像を欄いっぱいまで拡大する', () => {
     const { detail } = renderDetail();
     const column = within(detail).getByTestId('detail-cut');
     const frame = within(detail).getByTestId('detail-cut-frame');
     const cut = within(detail).getByTestId('detail-cut-image');
 
-    // 実物のカット域は 214x302 だが、カット画像の原寸は 178x253 (catalog の cutSizeW/H)。
-    // 214px の欄に置くと画像の右と下に白い余白が出るので、欄も枠も原寸にする。
+    // 実物のカット域は x 7..221 の 214px 固定で、アプリ版はそこまで画像を拡大する。
+    // 原寸 (catalog の cutSizeW/H = 178x253) のまま置くと実物より小さく見える。
     expect(column.style.flex).toBe(`0 0 ${CUT_WIDTH}px`);
     expect(frame.style.width).toBe(`${CUT_WIDTH}px`);
     expect(frame.style.height).toBe(`${CUT_HEIGHT}px`);
-    // 枠は幅 100% + aspectRatio ではなく画像と同じ実寸なので、余白が出る余地が無い。
+    // 枠は幅 100% + aspectRatio ではなく欄と同じ実寸なので、余白が出る余地が無い。
     expect(frame.style.aspectRatio).toBe('');
     expect(frame.style.maxHeight).toBe('');
-    // 画像は 178x253 の実寸 (原寸) を持つ。
+    // 画像は欄の実寸を持つ (原寸 178x253 と同じ縦横比 0.703)。
     expect(cut).toHaveAttribute('width', String(CUT_WIDTH));
     expect(cut).toHaveAttribute('height', String(CUT_HEIGHT));
     // 枠に合わせて拡大縮小する (切り取らない)。実寸どおりなので余白は出ない。
@@ -417,7 +418,8 @@ describe('DetailWindow', () => {
     const { detail } = renderDetail();
 
     const box = within(detail).getByTestId('detail-cut-space');
-    expect(box).toHaveTextContent('12a');
+    // 実物の番号は数字だけ (a / b は付かない)。
+    expect(box).toHaveTextContent('12');
     // 実物のカット枠 (635x903) の左上ボックス (x 22..164 / y 22..164) を比率で重ねる。
     expect(box.style.left).toBe(`${(22 / 635) * 100}%`);
     expect(box.style.background).toBe('');
@@ -427,8 +429,9 @@ describe('DetailWindow', () => {
     const { detail } = renderDetail({ checked: true, checkColor: 3 });
 
     const box = within(detail).getByTestId('detail-cut-space');
-    expect(box).toHaveStyle({ background: CHECK_COLOR_HEX[3] });
-    expect(box).toHaveTextContent('12a');
+    // チェック色で塗っても文字は黒のまま。
+    expect(box).toHaveStyle({ background: CHECK_COLOR_HEX[3], color: '#000000' });
+    expect(box).toHaveTextContent('12');
   });
 
   it('標準色 (0) は実物の会場マップと同じ緑で塗る', () => {

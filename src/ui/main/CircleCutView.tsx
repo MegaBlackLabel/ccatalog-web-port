@@ -3,12 +3,16 @@ import type { CheckColor } from '../../app/catalog-state';
 import type { ScrollMode } from '../../domain/app-settings';
 import { cutSpaceLabel, CutSpaceBox } from './cut-space';
 import type { FitBox } from './fit-zoom';
-import type { Circle, ComiketInfo } from '../../domain/types';
+import type { Circle } from '../../domain/types';
 
 export type CircleCutViewProps = {
   /** 現在のページのサークル。 */
   circles: readonly Circle[];
-  info: ComiketInfo | null;
+  /**
+   * 格子の直上に出す配置情報 (実物は「9日（金）西2壁 あ36〜あ53」)。
+   * アプリがページの先頭 / 末尾のサークルから組み立てて渡す。空なら帯を出さない。
+   */
+  heading?: string;
   selectedId: number | null;
   /** チェック済みサークルの ID。 */
   checkedIds: ReadonlySet<number>;
@@ -70,8 +74,16 @@ export const DEFAULT_CUT_VIEW_OPERATION: CutViewOperation = {
 };
 
 /** カット 1 枚の既定サイズ (カタログ情報が無いとき)。 */
-const DEFAULT_CUT_WIDTH = 178;
-const DEFAULT_CUT_HEIGHT = 253;
+/**
+ * カット 1 枚の表示サイズ。実物のカット画像 (`C096CUTL.CCZ` の 105x150。
+ * 高解像度版は 211x300) と同じ実寸で並べる。実測 (`1-untitled.png` 相当の
+ * カットウィンドウのスクリーンショット) でも 1 枚が 106x149 で、これは 105x150 と一致する。
+ *
+ * `ComiketInfo.cutSizeW/H` (178x253) は使わない。あれは C86 のヘルプでは
+ * 「サークルカットをページ画像から切り抜くための情報」で、表示サイズではない。
+ */
+const DEFAULT_CUT_WIDTH = 105;
+const DEFAULT_CUT_HEIGHT = 150;
 
 /** 実物のカットビューは 6 列の格子 (1 ページ 6x6 = cutIndex 1〜36。行数は枚数で決まる)。 */
 const GRID_COLUMNS = 6;
@@ -93,6 +105,27 @@ const VIEW_STYLE: CSSProperties = {
   flex: '1 1 0',
   minWidth: 0,
   minHeight: 0,
+};
+
+/**
+ * 格子の直上に出す配置情報の帯。実物は「9日（金）西2壁 あ36〜あ53」を
+ * カット格子と同じ幅の白い帯に大きな文字で出す (実測: 帯の高さ 39px /
+ * 文字の高さ 31px。ウィンドウ実寸のスクリーンショットから)。文字は画像ではなく
+ * アプリがフォントで描く。余白は最小限にして、背景の白を格子の幅に合わせる。
+ */
+const HEADING_STYLE: CSSProperties = {
+  background: '#ffffff',
+  color: '#000000',
+  fontSize: 31,
+  lineHeight: 1,
+  height: 39,
+  display: 'flex',
+  alignItems: 'center',
+  padding: '0 2px',
+  boxSizing: 'border-box',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  userSelect: 'none',
 };
 
 const EMPTY_STYLE: CSSProperties = {
@@ -124,7 +157,18 @@ const CELL_STYLE: CSSProperties = {
 const SELECTED_STYLE: CSSProperties = {
   outline: '2px solid #000080',
   outlineOffset: -2,
-  background: '#dce9ff',
+};
+
+/**
+ * 選択中のカットに重ねる水色のオーバーレイ。実物は選択したカットが水色に染まって
+ * 見える (画像の上に半透明の水色を重ねる)。カット画像はセル全面を覆うので、
+ * 背景色ではなく画像の上の層で表す。
+ */
+const SELECTED_OVERLAY_STYLE: CSSProperties = {
+  position: 'absolute',
+  inset: 0,
+  background: 'rgba(96, 176, 255, 0.4)',
+  pointerEvents: 'none',
 };
 
 const IMAGE_STYLE: CSSProperties = {
@@ -138,7 +182,7 @@ const IMAGE_STYLE: CSSProperties = {
 
 export function CircleCutView({
   circles,
-  info,
+  heading = '',
   selectedId,
   checkedIds,
   colorById,
@@ -153,8 +197,10 @@ export function CircleCutView({
   antiAlias = true,
   checkColors,
 }: CircleCutViewProps) {
-  const cutWidth = info?.cutSizeW || DEFAULT_CUT_WIDTH;
-  const cutHeight = info?.cutSizeH || DEFAULT_CUT_HEIGHT;
+  // カットの表示サイズは実物のカット画像の実寸 (105x150) を使う。
+  // ComiketInfo の cutSizeW/H (178x253) はページ画像からの切り抜き領域で、表示サイズではない。
+  const cutWidth = DEFAULT_CUT_WIDTH;
+  const cutHeight = DEFAULT_CUT_HEIGHT;
 
   // 格子の原寸 (6 列 x 6 行 + 余白)。セルは 1fr なので、原寸は「これ以上広げない」上限。
   const gridWidth = GRID_COLUMNS * cutWidth + (GRID_COLUMNS - 1) * CELL_GAP + VIEW_PADDING * 2;
@@ -256,6 +302,20 @@ export function CircleCutView({
         if (!(event.target as HTMLElement).closest('.cut-cell')) onSelect(null);
       }}
     >
+      {heading ? (
+        <div
+          data-testid="cut-heading"
+          style={{
+            ...HEADING_STYLE,
+            // 帯の白はカット格子と同じ幅にする (実物は 6 列ぶんの幅で、右の余白には伸びない)。
+            // 拡大率を指定していても文字の幅で途切れさせない。
+            width: fixedCellWidth === null ? '100%' : gridWidth,
+            maxWidth: gridWidth,
+          }}
+        >
+          {heading}
+        </div>
+      ) : null}
       <div
         style={{
           display: 'grid',
@@ -272,7 +332,6 @@ export function CircleCutView({
           width: fixedCellWidth === null ? '100%' : 'max-content',
           // 実物の 100% 表示 (178x253) より大きくは広げない。
           ...(fixedCellWidth === null ? { maxWidth: gridWidth } : null),
-          margin: '0 auto',
         }}
       >
           {circles.map((circle) => {
@@ -339,13 +398,23 @@ export function CircleCutView({
                     style={{ ...IMAGE_STYLE, imageRendering: antiAlias ? 'auto' : 'pixelated' }}
                   />
                 ) : null}
-                {/* スペース番号は実物と同じく左上のボックスの中に描く (チェック済みは色を塗る)。 */}
-                <CutSpaceBox
-                  className="cut-cell__space"
-                  space={space}
-                  color={isChecked ? checkColor : undefined}
-                  colors={checkColors}
-                />
+                {/*
+                  スペース番号は実物と同じく左上のボックスの中に描く (チェック済みは色を塗る)。
+                  実物がボックスを持つのは a のサークルだけ (実測: a のセルには見出し帯の左に
+                  区切り線があり、b のセルには無い)。b のサークルは番号も枠も出さない。
+                */}
+                {circle.spaceNoSub === 0 ? (
+                  <CutSpaceBox
+                    className="cut-cell__space"
+                    space={space}
+                    color={isChecked ? checkColor : undefined}
+                    colors={checkColors}
+                  />
+                ) : null}
+                {/* 選択中はカットの上に水色のオーバーレイを重ねる (実物と同じ)。 */}
+                {isSelected ? (
+                  <span className="cut-cell__overlay" style={SELECTED_OVERLAY_STYLE} />
+                ) : null}
               </div>
             );
           })}

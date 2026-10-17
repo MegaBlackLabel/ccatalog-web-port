@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CCATALOG_MENUS } from '../menu/menu-defs';
 import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkSwatchIcon } from '../check-colors';
 import type { CheckColor } from '../../app/catalog-state';
-import type { Circle, ComiketInfo } from '../../domain/types';
+import type { Circle } from '../../domain/types';
 import { CircleCutView } from './CircleCutView';
 import { MainWindow } from './MainWindow';
 import type { MainWindowJumpOptions, MainWindowProps } from './MainWindow';
@@ -14,20 +14,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const INFO: ComiketInfo = {
-  comiketNo: 96,
-  comiketName: 'コミックマーケット96',
-  cutSizeW: 178,
-  cutSizeH: 253,
-  cutOriginX: 8,
-  cutOriginY: 64,
-  cutOffsetX: 0,
-  cutOffsetY: 0,
-  mapSizeW: 10,
-  mapSizeH: 10,
-  mapOriginX: 0,
-  mapOriginY: 0,
-};
 
 function makeCircle(id: number, patch: Partial<Circle> = {}): Circle {
   return {
@@ -197,11 +183,10 @@ const JUMP_OPTIONS: MainWindowJumpOptions = {
 function renderMain(overrides: Partial<MainWindowProps> = {}) {
   const props: MainWindowProps = {
     title: 'コミックマーケット カタロム - 新規チェックリスト',
-    info: INFO,
     circles: CIRCLES,
     pageNo: 3,
     selectedId: null,
-    status: '該当 3 件',
+    message: '',
     checkedIds: NO_CHECKED,
     colorById: NO_COLORS,
     jumpOptions: JUMP_OPTIONS,
@@ -415,20 +400,31 @@ describe('MainWindow', () => {
     expect(props.onCommand).toHaveBeenLastCalledWith(34300);
   });
 
-  it('jumpOptions が無いときは circles から作れる選択肢だけを入れる', () => {
+  it('jumpOptions が無いときは circles と blocks から作れる選択肢だけを入れる', () => {
     const { main } = renderMain({
       jumpOptions: undefined,
       circles: [makeCircle(1, { day: 1, circleKana: 'ﾊﾅ' }), makeCircle(2, { day: 2, circleKana: 'ｱｷ' })],
+      blocks: [
+        { id: 1, name: 'あ', areaId: 2 },
+        { id: 2, name: 'は', areaId: 2 },
+      ],
     });
 
     const day = within(main).getByRole<HTMLSelectElement>('combobox', { name: '日付ジャンプ' });
     expect(Array.from(day.options).map((option) => option.textContent)).toEqual(['1日目', '2日目']);
 
+    // インデックスは実物と同じくブロック名 (渡されたブロックをそのまま並べる)。
     const index = within(main).getByRole<HTMLSelectElement>('combobox', { name: 'インデックスジャンプ' });
     expect(Array.from(index.options).map((option) => option.textContent)).toEqual(['あ', 'は']);
 
     // ホールはカタログデータ (circles) から作れないので選択肢なし = 押せない。
     expect(within(main).getByRole('combobox', { name: 'ホールジャンプ' })).toBeDisabled();
+  });
+
+  it('blocks が無ければインデックスジャンプは選択肢なし (押せない)', () => {
+    const { main } = renderMain({ jumpOptions: undefined, blocks: undefined });
+
+    expect(within(main).getByRole('combobox', { name: 'インデックスジャンプ' })).toBeDisabled();
   });
 
   it('段は初期値で決まる (幅では折り返さない)', () => {
@@ -534,24 +530,24 @@ describe('MainWindow', () => {
     const [, next] = within(main).getAllByRole('button', { name: '次のページ' });
     const slider = within(main).getByRole('slider', { name: 'ページ送り' });
 
-    // 実測: << >> = 38x17 / ページ番号 = 26x13 / スライダ = 202x20。
+    // 実測: << >> = 41x17 / ページ番号 = 36x13 (+「ページ」ラベル) / スライダ = 90x20。
     // 98.css の min-width / min-height は打ち消す。
-    expect(prev).toHaveStyle({ width: '38px', height: '17px', minWidth: '0px', minHeight: '0px' });
-    expect(next).toHaveStyle({ width: '38px', height: '17px', minWidth: '0px', minHeight: '0px' });
+    expect(prev).toHaveStyle({ width: '41px', height: '17px', minWidth: '0px', minHeight: '0px' });
+    expect(next).toHaveStyle({ width: '41px', height: '17px', minWidth: '0px', minHeight: '0px' });
     expect(within(main).getByRole('textbox', { name: 'ページ番号' })).toHaveStyle({
-      width: '26px',
+      width: '36px',
       height: '13px',
     });
-    expect(slider).toHaveStyle({ width: '202px', height: '20px' });
+    expect(slider).toHaveStyle({ width: '90px', height: '20px' });
+    // 実物は番号の右に「ページ」のラベルが付く (「106 ページ」)。
+    expect(within(main).getByText('ページ')).toBeInTheDocument();
 
     // 行は 20px (実測のスライダ 20px が収まる高さ) で、コントロールも文字も上下中央に置く。
     const controls = slider.parentElement;
     expect(controls).toHaveStyle({ alignItems: 'center', height: '20px' });
-    expect(within(main).getByText('該当 3 件')).toHaveStyle({
-      display: 'flex',
-      alignItems: 'center',
-      height: '20px',
-    });
+    // 文字欄も同じ行の高さを持つ (通常は空で、カットのホバー中だけサークル情報が出る)。
+    const textField = controls?.nextElementSibling as HTMLElement;
+    expect(textField).toHaveStyle({ display: 'flex', alignItems: 'center', height: '20px' });
   });
 
   it('1 ページ目では前のページへ戻らない', async () => {
@@ -577,11 +573,25 @@ describe('MainWindow', () => {
     expect(props.onPageChange).toHaveBeenCalledTimes(1);
   });
 
-  it('ステータスバーに文言とページ番号を表示する', () => {
-    const { main } = renderMain({ status: '該当 3 件', pageNo: 3 });
+  it('ステータスバーは通常は空で、ページ数は左の番号欄だけが持つ', () => {
+    const { main } = renderMain({ pageNo: 3 });
 
-    expect(within(main).getByText('該当 3 件')).toBeInTheDocument();
-    expect(within(main).getByText('3 ページ目')).toBeInTheDocument();
+    // 実物のステータスバーは通常は空 (「準備完了」のような状態は出さない)。
+    expect(within(main).queryByText('該当 3 件')).toBeNull();
+    // ページ数は左の番号欄 (「3」+「ページ」) に出し、右端には出さない (実物に無い)。
+    expect(within(main).getByRole('textbox', { name: 'ページ番号' })).toHaveValue('3');
+    expect(within(main).queryByText('3 ページ目')).toBeNull();
+  });
+
+  it('カットにマウスが乗ると、ステータスバーの文言を空白区切りのサークル情報に差し替える', async () => {
+    const { user, main } = renderMain({ message: '該当 3 件' });
+    const cell = within(main).getAllByRole('button', { name: /サークル/ })[0];
+
+    await user.hover(cell);
+    // 実物は項目を空白で区切る (「/」は使わない)。
+    const info = within(main).getByText(/サークル1/);
+    expect(info).toBeInTheDocument();
+    expect(info.textContent).not.toContain('/');
   });
 });
 
@@ -590,7 +600,7 @@ describe('CircleCutView', () => {
     render(
       <CircleCutView
         circles={CIRCLES}
-        info={INFO}
+
         selectedId={null}
         checkedIds={NO_CHECKED}
         onSelect={vi.fn()}
@@ -606,11 +616,13 @@ describe('CircleCutView', () => {
     expect(cutView.querySelectorAll('.cut-cell')).toHaveLength(CIRCLES.length);
   });
 
-  it('スペース番号を表示し、サークル名と執筆者はツールチップに持つ', () => {
+  it('スペース番号は a のサークルだけに出し、サークル名と執筆者はツールチップに持つ', () => {
     render(
       <CircleCutView
-        circles={[makeCircle(12, { spaceNo: 12, spaceNoSub: 1, penName: '執筆者名' })]}
-        info={null}
+        circles={[
+          makeCircle(11, { spaceNo: 11, spaceNoSub: 0 }),
+          makeCircle(12, { spaceNo: 12, spaceNoSub: 1, penName: '執筆者名' }),
+        ]}
         selectedId={null}
         checkedIds={NO_CHECKED}
         onSelect={vi.fn()}
@@ -618,7 +630,10 @@ describe('CircleCutView', () => {
       />,
     );
 
-    expect(screen.getByText('12b')).toBeInTheDocument();
+    // 実物は a のサークルだけが見出し帯の左に番号ボックスを持つ (b には枠も番号も無い)。
+    // 実物の番号は数字だけ (a / b は付かない)。
+    expect(screen.getByText('11')).toBeInTheDocument();
+    expect(screen.queryByText('12b')).toBeNull();
     // サークル名と執筆者は見出し帯として画像に焼き込まれているので、DOM ではツールチップで持つ。
     expect(screen.getByTitle(/サークル12/)).toBeInTheDocument();
     expect(screen.getByTitle(/執筆者名/)).toBeInTheDocument();
@@ -630,7 +645,7 @@ describe('CircleCutView', () => {
     render(
       <CircleCutView
         circles={CIRCLES}
-        info={INFO}
+
         selectedId={1}
         checkedIds={NO_CHECKED}
         onSelect={onSelect}

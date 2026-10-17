@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Win98Provider } from '@megablacklabel/react98retro';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Taskbar, Win98Provider } from '@megablacklabel/react98retro';
 import '@megablacklabel/react98retro/style.css';
 import './styles/app.css';
 import { useCatalog } from './app/use-catalog';
@@ -66,7 +66,6 @@ import { StartupConfirmDialog } from './ui/app-dialog/StartupConfirmDialog';
 import { SendInfoDialog } from './ui/app-dialog/SendInfoDialog';
 import type { Circle } from './domain/types';
 import { DEFAULT_GOOGLE_SEARCH_SETTINGS, DEFAULT_PAGE_SETUP } from './domain/app-settings';
-import { KANA_ROWS, OTHER_KANA_ROW, kanaRowOf } from './domain/kana';
 import { buildGoogleQuery } from './domain/google-search';
 import {
   parseChecklistCsv,
@@ -171,6 +170,16 @@ const LAYOUT_COMPACT: Record<LayoutName, WindowBox> = {
 const COMMAND_JUMP_DAY = 34000;
 const COMMAND_JUMP_HALL = 34100;
 const COMMAND_JUMP_INDEX = 34300;
+
+/** 画面下に貼り付くタスクバー。実物は高さ 28px で、ウィンドウより前面にある。 */
+const TASKBAR_STYLE: CSSProperties = {
+  position: 'fixed',
+  left: 0,
+  right: 0,
+  bottom: 0,
+  height: 28,
+  zIndex: 100,
+};
 
 /** 起動シーケンス (元実装: 起動確認 → シリアル番号 → 情報送信)。 */
 type StartupStep = 'confirm' | 'serial' | 'sendInfo' | 'done';
@@ -277,7 +286,8 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
    * それ以外はカットビューの表示領域から計算する (元実装の 幅 / 高さ / 全体に合わせる)。
    * 既定は「幅に合わせる」(カットビューは 6 列の 1fr でセルを縮める)。
    */
-  const [zoomFit, setZoomFit] = useState<FitMode | 'free'>('width');
+  // 起動時は実物と同じ 100% (等倍) で出す。メニューの「幅 / 高さ / 全体に合わせる」で切り替わる。
+  const [zoomFit, setZoomFit] = useState<FitMode | 'free'>('free');
   /** カットビューの表示領域 (CircleCutView が計測して知らせる)。 */
   const [cutBox, setCutBox] = useState<FitBox>({ width: 0, height: 0 });
   const [mapZoom, setMapZoom] = useState(0.5);
@@ -299,10 +309,10 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
   const [highResolution, setHighResolution] = useState(true);
   const [showListCuts, setShowListCuts] = useState(false);
   /** 表示中のドッキング ツールバー (表示 > ツールバー)。 */
-  // 実物の既定は「ナビゲートバー」を除いた 4 本 (基本 / ページ移動 / 表示 / チェック = 22 ボタン)。
-  // 実機キャプチャのツールバーは 22 ボタン + ツールバー内のコンボ / Edit が 1 行で並ぶ。
+  // 実物のツールバーは 5 本 (基本 / ページ移動 / 表示 / チェック / ナビゲート) が
+  // 2 段で並ぶ。ナビゲートバーの「戻る / 進む」も既定で出す。
   const [visibleBars, setVisibleBars] = useState<ToolbarBarId[]>(
-    TOOLBAR_BARS.filter((bar) => bar.id !== 'nav').map((bar) => bar.id),
+    TOOLBAR_BARS.map((bar) => bar.id),
   );
   /** ヘルプ (目次 / 検索 / キーワード)。null なら閉じている。 */
   const [helpMode, setHelpMode] = useState<HelpMode | null>(null);
@@ -431,10 +441,36 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     [circles, currentPage],
   );
 
-  /** カット 1 枚の表示サイズ。 */
-  const cutSize = { width: catalog?.info.cutSizeW ?? 178, height: catalog?.info.cutSizeH ?? 253 };
+  /**
+   * カット 1 枚の表示サイズ。実物のカット画像の実寸 (低解像度 105x150 / 高解像度 211x300)
+   * を使う。ComiketInfo の cutSizeW/H (178x253) はページ画像からの切り抜き領域で、
+   * 表示サイズではない (実測: カットウィンドウの 1 枚は 106x149)。
+   */
+  const cutSize = { width: 105, height: 150 };
   /** カットビューの行数 (6 列。ページの枚数で決まる)。 */
   const cutRows = Math.max(1, Math.ceil(pageCircles.length / 6));
+
+  /**
+   * カット格子の直上に出す配置情報。実物は「9日（金）西2壁 あ36〜あ53」で、
+   * 画像ではなくアプリがページの先頭 / 末尾のサークルから組み立てて描く
+   * (日付は ComiketDate の月日と曜日、会場は block → area の名前、範囲は
+   *  先頭と末尾の「ブロック名 + スペース番号」)。
+   */
+  const cutHeading = useMemo(() => {
+    const first = pageCircles[0];
+    const last = pageCircles[pageCircles.length - 1];
+    if (!first || !last) return '';
+    const date = (catalog?.dates ?? []).find((entry) => entry.id === first.day);
+    const weekday = date ? `（${WEEKDAY_SHORT[date.weekday]}）` : '';
+    const blockOf = (circle: Circle) =>
+      (catalog?.blocks ?? []).find((entry) => entry.id === circle.blockId);
+    const label = (circle: Circle) => `${blockOf(circle)?.name ?? ''}${circle.spaceNo}`;
+    // 会場はページ先頭のサークルのブロック → 地区の名前 (実物の「西2壁」)。
+    const area = (catalog?.areas ?? []).find((entry) => entry.id === blockOf(first)?.areaId)?.name ?? '';
+    return [`${date?.day ?? first.day}日${weekday}`, area, `${label(first)}〜${label(last)}`]
+      .filter(Boolean)
+      .join(' ');
+  }, [catalog, pageCircles]);
 
   // 「幅 / 高さ / 全体に合わせる」を選んでいるときは、表示領域と行数から拡大率を求め直す
   // (ウィンドウの大きさが変わっても追随する)。'free' のときは zoom をそのまま使う。
@@ -917,8 +953,10 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         label: area.name,
         command: COMMAND_JUMP_HALL + index,
       })),
-      indexes: [...KANA_ROWS.map((row) => row.label), OTHER_KANA_ROW].map((label, index) => ({
-        label,
+      // インデックスジャンプは実物と同じブロック名 (「あ」〜「れ」→「Ａ」〜「Ｒ」→
+      // 「ア」〜「リ」の 100 個)。サークル一覧の 3 つ目のセレクトと同じ並び。
+      indexes: (catalog?.blocks ?? []).map((block, index) => ({
+        label: block.name,
         command: COMMAND_JUMP_INDEX + index,
       })),
     }),
@@ -976,14 +1014,14 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     [catalog, circles, mapIdByPlace, jumpToCircle],
   );
 
-  /** インデックスジャンプ: 現在の日付で、指定のかな行の先頭へ。 */
+  /** インデックスジャンプ: 現在の日付で、指定したブロックの先頭へ。 */
   const jumpToIndex = useCallback(
     (index: number, day: number) => {
-      const label = [...KANA_ROWS.map((row) => row.label), OTHER_KANA_ROW][index];
-      if (!label) return;
-      jumpToCircle(circles.find((circle) => circle.day === day && kanaRowOf(circle.circleKana) === label));
+      const block = catalog?.blocks?.[index];
+      if (!block) return;
+      jumpToCircle(circles.find((circle) => circle.day === day && circle.blockId === block.id));
     },
-    [circles, jumpToCircle],
+    [catalog, circles, jumpToCircle],
   );
 
   // 検索 / 絞込みの結果が出たら先頭のサークルへカーソルを移す。
@@ -1435,16 +1473,6 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     [dispatch],
   );
 
-  const status = [
-    state.status,
-    `ページ ${currentPage}`,
-    `ズーム ${Math.round(zoom * 100)}%`,
-    `チェック ${checkedIds.size} 件`,
-    message,
-  ]
-    .filter(Boolean)
-    .join(' / ');
-
   // プレビュー面に出す 1 ページ (印刷形式ごと)。画像ではなく実データで組む。
   // サークルリスト印刷の見出しは、実物と同じ「コミックマーケット96 1日目 （金）」。
   const previewListTitle =
@@ -1512,11 +1540,11 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         initialY={layout.main.y}
         width={layout.main.width}
         height={layout.main.height}
-        info={catalog?.info ?? null}
         circles={pageCircles}
+        cutHeading={cutHeading}
+        message={message}
         pageNo={currentPage}
         selectedId={state.selectedId}
-        status={status}
         checkedIds={checkedIds}
         colorById={colorById}
         imageUrl={(circle) => imageOf(`/cuts/${circle.id}.png`)}
@@ -2100,6 +2128,17 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         />
       )}
       </div>
+
+      {/*
+        画面下のタスクバー (実物の Windows 98 のタスクバー)。実物は左端にスタート
+        ボタンがあるが、Web 版では置かず (メニューはメインウィンドウ側にある)、
+        トレイの時計だけを出す。ウィンドウより前面に置いて、重なっても隠れないようにする。
+      */}
+      <Taskbar
+        data-testid="taskbar"
+        style={TASKBAR_STYLE}
+        showTray
+      />
     </Win98Provider>
   );
 }

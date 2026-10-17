@@ -30,17 +30,46 @@ DEFAULT_SOURCE_DIR = r"D:\develop\comiket\解析\sqlite2\out\raw-cp932"
 # 実物のカット枠 (枠と区切り線だけの 2 値画像)。カットの幾何はここから実測する。
 CUT_TEMPLATE = os.path.join(ROOT, "tools", "cut-template.png")
 
-# カット画像の寸法。実物のカット枠テンプレートと同じ 635x903 (実物の高解像度カットの解像度。
-# 低解像度版の 105x150 は別に存在する)。アプリは 178x253 に縮小して表示する。
-#   枠・区切り線・スペース番号ボックスはテンプレートから測った比率をそのまま使う。
-#   中間調は純白 / 純黒の 2 値ディザのドット密度だけで作る (テンプレートも 2 色)。
-CUT_IMAGE_W, CUT_IMAGE_H = 635, 903
+# カット画像の寸法。実物の高解像度カット (`CM96/C096CUTH.CCZ` の `NNNN.PNG`) と同じ 211x300。
+# 実物は 105x150 (低解像度 `C096CUTL.CCZ`) と 211x300 の 2 種類を持ち、一覧は 178x253 に
+# 縮小して表示する。ダミーは高解像度版と同じ寸法で作る。
+CUT_IMAGE_W, CUT_IMAGE_H = 211, 300
 
-# 実物のカットは 105x150 の設計空間で描かれていて、アプリはそれを 178x253 に拡大して見せている。
-# 635x903 の画像でも見え方が実物と同じになるよう、絵と文字の寸法は設計値の 6.05 倍で描く。
+# 実物のカットは 105x150 の設計空間で描かれている (枠・文字・絵の寸法はすべてこの空間の値)。
+# 211x300 の画像でも見え方が実物と同じになるよう、設計値の 2 倍で描く。
 DESIGN_W, DESIGN_H = 105, 150
 SCALE_X = CUT_IMAGE_W / DESIGN_W
 SCALE_Y = CUT_IMAGE_H / DESIGN_H
+
+# 実物の低解像度カット (解析/recuts/103747.PNG など) が使っている 16 段のグレー。
+# 実物のカットは 2 値ではなく、この 16 階調でイラストの濃淡を作っている。
+CUT_GRAY_LEVELS = [0, 40, 68, 88, 112, 130, 145, 160, 177, 188, 199, 210, 219, 229, 238, 255]
+
+
+def _quantize_cut(image):
+    """カット画像を実物と同じ 16 段のグレーに丸める (パレットも 16 色)。"""
+    levels = CUT_GRAY_LEVELS
+    index_of = {level: i for i, level in enumerate(levels)}
+    # 元の値 (0..255) を、そのままパレットのインデックス (0..15) に写す変換表。
+    table = [index_of[min(levels, key=lambda level: abs(level - value))] for value in range(256)]
+    indexed = image.convert('L').point(table).convert('P')
+    indexed.putpalette([v for level in levels for v in (level, level, level)])
+    return indexed
+
+
+def _shade(draw, box, base, spread, seed):
+    """絵の範囲に、id から決まる淡いグラデーションを敷く。
+
+    実物のカットは白地ではなく、うっすらした濃淡の上にイラストが乗っている
+    (実測のインク量: 白 24〜53% / 黒 13〜27% / グレー 28〜54%)。
+    """
+    x0, y0, x1, y1 = box
+    step = _design(3, SCALE_Y)
+    for i, y in enumerate(range(int(y0), int(y1), step)):
+        # 上下で明るさを変え、id ごとに位相をずらす。
+        phase = ((i + seed) % 8) / 7
+        level = base + int(spread * (1 - abs(phase * 2 - 1)))
+        draw.rectangle([x0, y, x1, min(y1, y + step)], fill=min(255, level))
 
 
 def _design(value, scale):
@@ -57,12 +86,13 @@ DESK_MARGIN = 5
 DESK_TOP = 40
 # ブロック 1 つの帯に並べる机の列数の上限。
 DESK_MAX_COLS = 4
-# 配置するサークル数と、抽選漏れ (day / blockId / spaceNo / pageNo / cutIndex が 0) の数。
-PLACED_CIRCLES = 180
+# 抽選漏れ (day / blockId / spaceNo / pageNo / cutIndex が 0) の数。
+# 配置するサークル数はブロック数 x 1 ページぶんのスペース x 2 (a/b) で決まる。
 MISSED_CIRCLES = 3
-# 1 ページに載るカット数。実物は 6x6 の格子で、cutIndex 1〜36 / 最多は 36 件のページ。
-# 最初のページ番号は実物の ComiketCircle から読む。
-CUTS_PER_PAGE = 36
+# 1 ページに載るスペース数。実物 (ComiketCircle の pageNo 104〜) は 1 ページ = 1 ブロックで、
+# 15〜18 スペース (a/b の 2 カットで 30〜36 枚) が入る。ダミーは 15 スペース = 30 カット固定にする。
+# スペース番号はブロックの中で 1 から連番。最初のページ番号は実物の ComiketCircle から読む。
+SPACES_PER_PAGE = 15
 SEED = 96
 
 AREA_PREFIX = ["あお", "きん", "しろ", "ゆめ", "ほし", "かぜ", "みず", "ひか", "つき", "そら",
@@ -244,21 +274,7 @@ def day_for_block(block_id, area, map_days):
     return days[(block_id - 1) % len(days)]
 
 
-def seat_targets(days, total):
-    """日程ごとの席数 (机の数)。
-
-    1 ページ = CUTS_PER_PAGE 席なので、日程ごとの席数もその倍数にして全ページを満席にする。
-    割り切れない余りのページは後ろの日程から足す。
-    """
-    page_count = (total + CUTS_PER_PAGE - 1) // CUTS_PER_PAGE
-    pages, extra = divmod(page_count, len(days))
-    return {
-        day: (pages + (1 if index >= len(days) - extra else 0)) * CUTS_PER_PAGE
-        for index, day in enumerate(days)
-    }
-
-
-def plan_spaces(areas, blocks, map_days, rng, total):
+def plan_spaces(areas, blocks, map_days):
     """机の割り当て (blockId, spaceNo) を組む。
 
     ブロックは実物の 100 件をそのまま使い、実物の ComiketLayout / ComiketCircle と同じく
@@ -274,30 +290,12 @@ def plan_spaces(areas, blocks, map_days, rng, total):
     ]
     if not usable:
         raise SystemExit("机を置けるブロックがありません (地区の印刷範囲を確認してください)。")
-    rng.shuffle(usable)
-
-    blocks_by_day = collections.defaultdict(list)
-    for block_id in usable:
-        area = area_by_id[block_by_id[block_id]["areaId"]]
-        blocks_by_day[day_for_block(block_id, area, map_days)].append(block_id)
-
-    seats = seat_targets(sorted(blocks_by_day), total)
+    # 実物は 1 ページ = 1 ブロックで、1 ブロックに 15〜18 スペースが入る。
+    # ダミーも同じにして、どのブロックも SPACES_PER_PAGE スペース (1 ページぶん) を持たせる。
     plan = []
-    for day, group in sorted(blocks_by_day.items()):
-        target = seats[day]
-        if target < len(group):
-            raise SystemExit("席数がブロック数より少なく、机の無いブロックが出ます (日程 %d)。" % day)
-        # まず 1 つずつ配り、席が埋まるまで順に足していく。
-        space_of = {block_id: 1 for block_id in group}
-        assigned = len(group)
-        index = 0
-        while assigned < target:
-            space_of[group[index % len(group)]] += 1
-            assigned += 1
-            index += 1
-        for block_id in group:
-            for space_no in range(1, space_of[block_id] + 1):
-                plan.append((block_id, space_no))
+    for block_id in usable:
+        for space_no in range(1, SPACES_PER_PAGE + 1):
+            plan.append((block_id, space_no))
     return sorted(plan)
 
 
@@ -341,7 +339,7 @@ def build_layouts(plan, areas, blocks):
     return layouts
 
 
-def make_circle(circle_id, comiket_no, day, block_id, space_no, page_no, cut_index, genre_ids, rng):
+def make_circle(circle_id, comiket_no, day, block_id, space_no, space_no_sub, page_no, cut_index, genre_ids, rng):
     """ダミーのサークル 1 件。名前などは作り物で、位置と日程は実物の関係から来る。"""
     name = rng.choice(AREA_PREFIX) + rng.choice(AREA_SUFFIX)
     has_contact = rng.random() < 0.5
@@ -353,7 +351,7 @@ def make_circle(circle_id, comiket_no, day, block_id, space_no, page_no, cut_ind
         "day": day,
         "blockId": block_id,
         "spaceNo": space_no,
-        "spaceNoSub": 1 if rng.random() < 0.2 else 0,
+        "spaceNoSub": space_no_sub,
         "genreId": rng.choice(genre_ids),
         "circleName": name,
         "circleKana": kana_of(rng, rng.randrange(4, 7)),
@@ -377,35 +375,49 @@ def build_circles(plan, areas, blocks, map_days, block_genres, genre_ids, comike
     """ダミーのサークルを組む。
 
     日程はブロック → 地区 → 地図 とたどり、その地図を使っている日程 (実物から集計した
-    map_days) の中から決める。ページ番号は日程ごとの連番で、1 ページに CUTS_PER_PAGE 件
-    (実物と同じ 6x6 の格子) そろう。
+    map_days) の中から決める。ページ番号はブロックごとの連番で、1 ページに
+    SPACES_PER_PAGE スペース (a/b の 2 カットで 30 枚) が入る。
     """
     area_by_id = {area["id"]: area for area in areas}
     block_by_id = {block["id"]: block for block in blocks}
-    by_day = collections.defaultdict(list)
+    # 実物と同じく、1 ページには 1 つのブロックのスペースだけを入れる。
+    by_block = collections.defaultdict(list)
     for block_id, space_no in plan:
+        by_block[block_id].append(space_no)
+
+    # 日程ごとにブロックをまとめる (実物も日程ごとにページが連番で並ぶ)。
+    by_day = collections.defaultdict(list)
+    for block_id in sorted(by_block):
         area = area_by_id[block_by_id[block_id]["areaId"]]
-        by_day[day_for_block(block_id, area, map_days)].append((block_id, space_no))
+        by_day[day_for_block(block_id, area, map_days)].append(block_id)
 
     circles = []
     page_cursor = first_page
     for day in sorted(by_day):
-        spots = by_day[day]
-        for index, (block_id, space_no) in enumerate(spots):
-            circles.append(
-                make_circle(
-                    len(circles) + 1,
-                    comiket_no,
-                    day=day,
-                    block_id=block_id,
-                    space_no=space_no,
-                    page_no=page_cursor + index // CUTS_PER_PAGE,
-                    cut_index=index % CUTS_PER_PAGE + 1,
-                    genre_ids=block_genres.get(block_id) or genre_ids,
-                    rng=rng,
-                )
-            )
-        page_cursor += (len(spots) + CUTS_PER_PAGE - 1) // CUTS_PER_PAGE
+        for block_id in by_day[day]:
+            spaces = sorted(by_block[block_id])
+            # 1 ページ = SPACES_PER_PAGE スペース。1 スペースに a と b の 2 サークル。
+            for offset in range(0, len(spaces), SPACES_PER_PAGE):
+                chunk = spaces[offset:offset + SPACES_PER_PAGE]
+                cut_index = 1
+                for space_no in chunk:
+                    for space_no_sub in (0, 1):
+                        circles.append(
+                            make_circle(
+                                len(circles) + 1,
+                                comiket_no,
+                                day=day,
+                                block_id=block_id,
+                                space_no=space_no,
+                                space_no_sub=space_no_sub,
+                                page_no=page_cursor,
+                                cut_index=cut_index,
+                                genre_ids=block_genres.get(block_id) or genre_ids,
+                                rng=rng,
+                            )
+                        )
+                        cut_index += 1
+                page_cursor += 1
 
     # 抽選漏れ。実物と同じく day / blockId / spaceNo / pageNo / cutIndex が 0。
     for _ in range(MISSED_CIRCLES):
@@ -416,6 +428,7 @@ def build_circles(plan, areas, blocks, map_days, block_genres, genre_ids, comike
                 day=0,
                 block_id=0,
                 space_no=0,
+                space_no_sub=0,
                 page_no=0,
                 cut_index=0,
                 genre_ids=genre_ids,
@@ -474,20 +487,25 @@ def validate_catalog(catalog, first_page):
         else:
             pages[circle["pageNo"]].append(circle)
 
-    # ページは実物と同じ 6x6 の格子で、cutIndex 1〜CUTS_PER_PAGE が 1 件ずつそろう。
+    # ページは 1 ブロックぶんで、cutIndex が 1 から連番でそろう (a/b の 2 件で 1 スペース)。
     if not pages or min(pages) != first_page:
         raise SystemExit("最初のページが %d ではありません。" % first_page)
     if sorted(pages) != list(range(min(pages), max(pages) + 1)):
         raise SystemExit("ページ番号が連番ではありません。")
     for page_no, page_circles in pages.items():
-        if len(page_circles) != CUTS_PER_PAGE:
-            raise SystemExit("ページ %d のカット数が %d 件です。" % (page_no, len(page_circles)))
+        # 1 スペースに a と b の 2 件なので、カット数は必ず偶数。
+        if len(page_circles) % 2 != 0:
+            raise SystemExit("ページ %d のカット数が奇数 (%d 件) です。" % (page_no, len(page_circles)))
+        if len(page_circles) > SPACES_PER_PAGE * 2:
+            raise SystemExit("ページ %d のカット数が多すぎます (%d 件)。" % (page_no, len(page_circles)))
         if sorted(circle["cutIndex"] for circle in page_circles) != list(
-            range(1, CUTS_PER_PAGE + 1)
+            range(1, len(page_circles) + 1)
         ):
-            raise SystemExit("ページ %d のカット番号が 1〜%d ではありません。" % (page_no, CUTS_PER_PAGE))
+            raise SystemExit("ページ %d のカット番号が 1〜%d ではありません。" % (page_no, len(page_circles)))
         if len({circle["day"] for circle in page_circles}) != 1:
             raise SystemExit("ページ %d に複数の日程が混ざっています。" % page_no)
+        if len({circle["blockId"] for circle in page_circles}) != 1:
+            raise SystemExit("ページ %d に複数のブロックが混ざっています。" % page_no)
 
 
 
@@ -516,39 +534,55 @@ def load_font(size):
 ACCENTS = [None, None, (192, 32, 32), None, (32, 64, 160), None, (24, 128, 72), None]
 
 
-def _dither(draw, box, dot, pitch):
-    """ごく薄い 2 値ディザ。中間調はこのドット密度だけで作る。
-
-    dot / pitch は設計値 (105x150 で 1px の点・2px ピッチ) を 635x903 に写した画素数。
-    """
-    x0, y0, x1, y1 = box
-    for y in range(int(y0), int(y1), pitch):
-        # 1 行ごとに半ピッチずらして網点らしく見せる。
-        for x in range(int(x0) + (y // pitch % 2) * (pitch // 2), int(x1), pitch):
-            draw.rectangle([x, y, min(x + dot, x1) - 1, min(y + dot, y1) - 1], fill=0)
+# カットの絵に描く短い語 (人物は描かない方針なので、文字と幾何学図形だけで構成する)。
+CUT_MOTIF_WORDS = ["C96", "新刊", "ダミー", "サンプル", "既刊", "無配"]
 
 
 def _motif(draw, circle, geometry, stroke):
-    """枠の内側の簡素な図形。細い円 1 つと細い水平線 1〜2 本だけ。
+    """絵の範囲に、id から決まる幾何学図形と短い語を描く (人物は描かない)。
 
-    差は id から決定的に決める (円の位置と大きさ、線の本数と長さ) ので、183 枚が同じトーンに揃う。
-    線幅は設計値 (105x150 で円 2.5px / 線 2px) を 635x903 に写した値。
-    人物・顔・セリフ・コマ割りは描かない。
+    実物のカットは白地に濃淡のあるイラスト + 文字だが、ダミーは人物を描かず
+    「文字とシンプルな図形」だけで構成する。形は id から決定的に決めるので、
+    183 枚が同じトーンに揃う。
     """
     x0, y0, x1, y1 = geometry["art"]
     index = circle["id"]
-    radius = _design(18 + 2 * (index % 5), SCALE_X)
     cx = (x0 + x1) // 2 + _design(index % 3 - 1, SCALE_X)
-    cy = (y0 + y1) // 2 - _design(3 * (index % 4), SCALE_Y)
-    draw.ellipse(
-        [cx - radius, cy - radius, cx + radius, cy + radius],
-        outline=0,
-        width=stroke["circle"],
-    )
-    for i in range(1 + index % 2):
-        half = _design(15 + 2 * ((index + i) % 5), SCALE_X)
-        y = cy + radius + _design(7 + 5 * i, SCALE_Y)
-        draw.line([cx - half, y, cx + half, y], fill=0, width=stroke["rule"])
+    cy = (y0 + y1) // 2 - _design(6 + 3 * (index % 3), SCALE_Y)
+    radius = _design(26 + 3 * (index % 4), SCALE_X)
+    box = [cx - radius, cy - radius, cx + radius, cy + radius]
+
+    kind = index % 4
+    if kind == 0:
+        # 円 (淡いグレーの面 + 黒の輪郭)。
+        draw.ellipse(box, fill=225, outline=0, width=stroke["circle"])
+    elif kind == 1:
+        # 四角 (同上)。
+        draw.rectangle(box, fill=225, outline=0, width=stroke["circle"])
+    elif kind == 2:
+        # 三角。
+        draw.polygon(
+            [(cx, cy - radius), (cx + radius, cy + radius), (cx - radius, cy + radius)],
+            fill=225,
+            outline=0,
+        )
+        draw.line([(cx, cy - radius), (cx + radius, cy + radius)], fill=0, width=stroke["rule"])
+        draw.line([(cx + radius, cy + radius), (cx - radius, cy + radius)], fill=0, width=stroke["rule"])
+        draw.line([(cx - radius, cy + radius), (cx, cy - radius)], fill=0, width=stroke["rule"])
+    else:
+        # 同心円 + 十字線。
+        draw.ellipse(box, outline=0, width=stroke["circle"])
+        inner = _design(12, SCALE_X)
+        draw.ellipse([cx - inner, cy - inner, cx + inner, cy + inner], fill=225, outline=0, width=stroke["rule"])
+        draw.line([cx - radius, cy, cx + radius, cy], fill=0, width=stroke["rule"])
+        draw.line([cx, cy - radius, cx, cy + radius], fill=0, width=stroke["rule"])
+
+    # 図形の下に短い語を 1 つ置く (文字も入れる方針)。
+    word = CUT_MOTIF_WORDS[index % len(CUT_MOTIF_WORDS)]
+    font = load_font(_design(16, SCALE_Y))
+    if font is not None:
+        ty = min(y1 - 2, cy + radius + _design(8, SCALE_Y))
+        draw.text((cx, ty), word, fill=0, font=font, anchor="mt")
 
 
 def measure_cut_geometry(template_path):
@@ -640,26 +674,23 @@ def _heading(draw, circle, geometry):
 
 
 def draw_cut(circle, path, geometry):
-    """実物のカット枠に合わせたダミーカット (純白 / 純黒の 2 色)。
+    """実物のカット枠に合わせたダミーカット (16 段のグレー)。
 
     枠・区切り線・スペース番号ボックスは実物のテンプレート (tools/cut-template.png) から
     測った位置に描く。ボックスの中は空のままにして、アプリがスペース番号とチェック色を描く。
-    見出し帯にはサークル名を焼き込み、内側は円と水平線だけの簡素な図形にする。
-    中間調は 2 値ディザ (ドット密度) だけで作る。
+    見出し帯にはサークル名を焼き込み、内側には濃淡のあるイラスト風の図形を描く。
+    実物のカット (解析/recuts/*.PNG) は 2 値ではなく 16 段のグレーなので、同じ階調に丸める。
     """
     from PIL import Image, ImageDraw
 
     image = Image.new('L', (CUT_IMAGE_W, CUT_IMAGE_H), 255)
     draw = ImageDraw.Draw(image)
 
-    # 設計値 (105x150) を 635x903 に写した寸法。
-    # 網点は設計 1px の点 / 4px ピッチ (被覆率 6.25%)。実物のカットは白地に細い線が基本で、
-    # 黒画素率が 13〜27% に収まる濃さはこれくらい。
-    dot = _design(1, SCALE_X)
-    pitch = _design(4, SCALE_X)
+    # 設計値 (105x150) をカットの寸法に写した寸法。
     stroke = {"circle": _design(2.5, SCALE_X), "rule": _design(2, SCALE_X)}
 
-    _dither(draw, geometry["art"], dot, pitch)
+    # 絵の範囲に淡い濃淡を敷いてから、イラストを重ねる (実物のインク量に寄せる)。
+    _shade(draw, geometry["art"], base=228, spread=40, seed=circle["id"] % 8)
     _motif(draw, circle, geometry, stroke)
     _heading(draw, circle, geometry)
 
@@ -677,10 +708,8 @@ def draw_cut(circle, path, geometry):
     draw.rectangle([box_x0, top_y1 + 1, box_x1, divider_y0 - 1], fill=0)
     draw.rectangle([left_x1 + 1, divider_y0, right_x0 - 1, divider_y1], fill=0)
 
-    # 純白と純黒だけの 2 値 PNG (パレットも 2 色)。
-    binary = image.convert('1', dither=Image.Dither.NONE).convert('P')
-    binary.putpalette([0, 0, 0, 255, 255, 255])
-    binary.save(path, optimize=True)
+    # 実物と同じ 16 段のグレーに丸めて保存する。
+    _quantize_cut(image).save(path, optimize=True)
 
 
 # マップ上の机の色。ブロックごとに変えて、どのブロックの机か分かるようにする。
@@ -747,7 +776,7 @@ def main():
         args.source_dir, tables["areas"], tables["blocks"]
     )
     genres = tables["genres"]
-    plan = plan_spaces(tables["areas"], tables["blocks"], map_days, rng, PLACED_CIRCLES)
+    plan = plan_spaces(tables["areas"], tables["blocks"], map_days)
     layouts = build_layouts(plan, tables["areas"], tables["blocks"])
     circles = build_circles(
         plan,

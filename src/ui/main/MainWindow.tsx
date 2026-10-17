@@ -26,8 +26,7 @@ import { TOOLBAR_ICONS } from './toolbar-icons';
 import { TOOLBAR_CONTENT_HEIGHT, TOOLBAR_PADDING_X } from './toolbar-groove';
 import { checkColorPalette, checkSwatchIcon } from '../check-colors';
 import type { CheckColor } from '../../app/catalog-state';
-import { SOURCE_CHARS, TARGET_CHARS, normalize } from '../../domain/normalize';
-import type { Circle, ComiketInfo } from '../../domain/types';
+import type { BlockInfo, Circle } from '../../domain/types';
 import { MENU_COMMANDS } from '../menu/menu-defs';
 import { toMenuBarMenus, TOOLBAR_BARS, type ToolbarBarId } from '../menu/to-menu-bar';
 import { TOOLBAR_COMMANDS } from './toolbar-commands';
@@ -58,15 +57,28 @@ export type MainWindowJumpOptions = {
 export type MainWindowProps = {
   /** 例: 'コミックマーケット カタロム - 新規チェックリスト' */
   title: string;
-  info: ComiketInfo | null;
+  /**
+   * 操作のフィードバック (「これ以上戻れません」など)。実物のステータスバーは
+   * 通常は空で、カットのホバー中だけサークル情報が出る。
+   */
+  message?: string;
   /** 現在ページのサークル (カット表示用)。 */
   circles: readonly Circle[];
+  /**
+   * カット格子の直上に出す配置情報 (実物は「9日（金）西2壁 あ36〜あ53」)。
+   * アプリがページの先頭 / 末尾のサークルから組み立てて渡す。
+   */
+  cutHeading?: string;
+  /**
+   * ブロック (ComiketBlock)。インデックスジャンプの選択肢を実物と同じ
+   * 「あ」〜「れ」→「Ａ」〜「Ｒ」→「ア」〜「リ」の 100 個で出す。
+   */
+  blocks?: readonly BlockInfo[];
   pageNo: number;
   selectedId: number | null;
   /** カット画像の URL (未指定ならテキストのみ)。 */
   imageUrl?: (circle: Circle) => string | undefined;
   /** ステータスバーに出す文言。 */
-  status: string;
   checkedIds: ReadonlySet<number>;
   /** サークル ID → チェック色 (0 = 標準色)。カットのスペース番号ボックスをこの色で塗る。 */
   colorById: ReadonlyMap<number, CheckColor>;
@@ -138,16 +150,6 @@ type ToolbarGroup = {
    */
   extra?: ReactNode;
 };
-
-/**
- * 正規化済みの読み先頭 (半角カナ) を表示用のひらがなへ戻す。
- * normalize.ts の変換表を逆引きする (半角カナ以外はそのまま)。
- */
-function kanaIndexLabel(head: string): string {
-  if (!/^[\uFF61-\uFF9F]$/.test(head)) return head;
-  const index = TARGET_CHARS.indexOf(head);
-  return index >= 0 ? SOURCE_CHARS[index] : head;
-}
 
 /** アイコン付きボタン 1 個。label / tooltip は必ず持たせる (画像が読めなくても名前が残る)。 */
 function toolbarButton(
@@ -332,9 +334,12 @@ function ZoomPercentInput({
   );
 }
 
-/** ステータスバーのページ番号の Edit (実測 26x13)。 */
+/**
+ * ステータスバーのページ番号の Edit。実物は「106」が入る幅で、隣に「ページ」の
+ * ラベルが付く (実測: 欄 36px + ラベル 33px)。
+ */
 const PAGE_INPUT_STYLE: CSSProperties = {
-  width: 26,
+  width: 36,
   height: 13,
   padding: 0,
   minHeight: 0,
@@ -343,19 +348,28 @@ const PAGE_INPUT_STYLE: CSSProperties = {
   flex: '0 0 auto',
 };
 
-/** ステータスバーのスライダ (実測 202x20)。 */
+/** ページ番号の右の「ページ」ラベル (実測 33px)。 */
+const PAGE_LABEL_STYLE: CSSProperties = {
+  flex: '0 0 auto',
+  lineHeight: 1,
+};
+
+/**
+ * ステータスバーのスライダ。実物は「106 ページ」の欄 (36px) の 2.5 倍ほどで、
+ * 隣の << / >> と隙間なく並ぶ (実測: ボタンとの間隔 3px ほど)。
+ */
 const PAGE_SLIDER_STYLE: CSSProperties = {
-  width: 202,
+  width: 90,
   height: 20,
   flex: '0 0 auto',
 };
 
 /**
- * ステータスバーの << / >> ボタン (実測 38x17)。98.css の min-width /
+ * ステータスバーの << / >> ボタン (実測 41x17)。98.css の min-width /
  * min-height を打ち消し、固定高さでも文字が上下中央に来るようにする。
  */
 const STATUS_BUTTON_STYLE: CSSProperties = {
-  width: 38,
+  width: 41,
   height: 17,
   minWidth: 0,
   minHeight: 0,
@@ -371,10 +385,14 @@ const STATUS_BUTTON_STYLE: CSSProperties = {
 const STATUS_CONTROLS_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 4,
-  // 実測のスライダ (202x20) が収まる高さ。19 だと上下 1px ずつはみ出していた。
+  // 実物はコントロールどうしの隙間がほとんど無い。
+  gap: 2,
+  // 実測のスライダ (90x20) が収まる高さ。19 だと上下 1px ずつはみ出していた。
+  // 左右の余白は 0 にして、右の区切り線が「次のページ」ボタンのすぐ隣に来るようにする。
+  // 幅は内容ぴったりにする (伸ばすと >> の右に空きができ、区切り線が離れて見える)。
   height: 20,
-  padding: '0 3px',
+  padding: 0,
+  flex: '0 0 auto',
   margin: 0,
   boxSizing: 'border-box',
 };
@@ -392,11 +410,12 @@ const STATUS_TEXT_STYLE: CSSProperties = {
 
 export function MainWindow({
   title,
-  info,
   circles,
+  message = '',
+  cutHeading = '',
+  blocks,
   pageNo,
   selectedId,
-  status,
   checkedIds,
   colorById,
   onCommand,
@@ -441,7 +460,8 @@ export function MainWindow({
           `${hoveredCircle.spaceNo}${hoveredCircle.spaceNoSub === 1 ? 'b' : 'a'}`,
         ]
           .filter(Boolean)
-          .join(' / ');
+          // 実物のステータスバーは項目を空白で区切る (「/」は使わない)。
+          .join(' ');
 
   // 外からページが変わったら入力欄も追随させる。
   useEffect(() => {
@@ -457,11 +477,8 @@ export function MainWindow({
   // カタログデータ (現在ページのサークル) から作れる分だけ入れる。
   const jumps = useMemo<Required<MainWindowJumpOptions>>(() => {
     const days = new Set<number>();
-    const indexes = new Set<string>();
     for (const circle of circles) {
       if (circle.day > 0) days.add(circle.day);
-      const head = normalize([...circle.circleKana][0] ?? '');
-      if (head) indexes.add(head);
     }
     return {
       days:
@@ -470,13 +487,16 @@ export function MainWindow({
           .sort((a, b) => a - b)
           .map((day, index) => ({ label: `${day}日目`, command: TOOLBAR_COMMANDS.dayJumpBase + index })),
       halls: jumpOptions?.halls ?? [],
+      // インデックスは実物と同じくブロック名 (「あ」〜「れ」→「Ａ」〜「Ｒ」→
+      // 「ア」〜「リ」)。ブロックのデータが無ければ選択肢なし = 押せない。
       indexes:
         jumpOptions?.indexes ??
-        [...indexes]
-          .sort()
-          .map((head, index) => ({ label: kanaIndexLabel(head), command: TOOLBAR_COMMANDS.indexJumpBase + index })),
+        (blocks ?? []).map((block, index) => ({
+          label: block.name,
+          command: TOOLBAR_COMMANDS.indexJumpBase + index,
+        })),
     };
-  }, [circles, jumpOptions]);
+  }, [blocks, circles, jumpOptions]);
 
   // 拡大率はアプリ側と同じ % (実物のツールバー内 Edit の表示と同じ単位)。
   const zoomPercent = Math.round(zoom);
@@ -695,13 +715,16 @@ export function MainWindow({
         onClose={onClose}
         width={width}
         height={height}
+        // これ以上小さくできない幅 (実物のウィンドウのスクリーンショット 659x1084 から)。
+        // 狭くするとツールバーとカットの 6 列が入らない。
+        style={{ minWidth: 659 }}
         initialX={initialX}
         initialY={initialY}
         statusBar={
           // 元実装のステータスバーは 1 行で、左から
-          // [ページ番号入力][<<][ページ送りスライダ][>>] のあとに文字のステータス欄が並ぶ。
-          // status (App 側で「ページ N」を含む) と二重にならないよう、ページ番号は
-          // 「N ページ目」の形で並べる。
+          // [ページ番号入力][ページ][<<][ページ送りスライダ][>>] のあとに文字の欄が並ぶ。
+          // 文字の欄はカットのホバー中だけサークル情報を出し、それ以外は空にする
+          // (実物のステータスバーは通常は空)。
           // フィールドを実測の 20px にしたので、帯は 1 (上辺の白) + 2 + 20 + 2 = 25px。
           // ライブラリの既定はフィールド 17px / 帯 22px。
           <StatusBar style={{ height: 25 }}>
@@ -720,6 +743,8 @@ export function MainWindow({
                   if (event.key === 'Enter') commitPageDraft();
                 }}
               />
+              {/* 実物は番号の右に「ページ」のラベルが付く (「106 ページ」)。 */}
+              <span style={PAGE_LABEL_STYLE}>ページ</span>
               <Button
                 aria-label="前のページ"
                 style={STATUS_BUTTON_STYLE}
@@ -744,9 +769,9 @@ export function MainWindow({
               </Button>
             </div>
             {/* 元実装: 「現在のマウスカーソルの位置にあるサークルカットのサークル情報が簡易表示されます」
-                (CHM 1WINDOW/2CIRCLE.HTM ステータスバー節)。 */}
-            <StatusBarField style={STATUS_TEXT_STYLE}>{hoverInfo ?? status}</StatusBarField>
-            <StatusBarField style={STATUS_TEXT_STYLE}>{pageNo} ページ目</StatusBarField>
+                (CHM 1WINDOW/2CIRCLE.HTM ステータスバー節)。右端にページ数を重ねて出す欄は
+                実物に無いので置かない (ページ数は左の番号欄が持つ)。 */}
+            <StatusBarField style={STATUS_TEXT_STYLE}>{hoverInfo ?? message}</StatusBarField>
           </StatusBar>
         }
       >
@@ -789,7 +814,8 @@ export function MainWindow({
         />
         <CircleCutView
           circles={circles}
-          info={info}
+
+          heading={cutHeading}
           selectedId={selectedId}
           checkedIds={checkedIds}
           colorById={colorById}

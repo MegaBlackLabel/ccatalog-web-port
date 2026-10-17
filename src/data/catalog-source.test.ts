@@ -12,7 +12,10 @@ import dummy from './fixtures/dummy-catalog.json';
 const catalog = dummy as CatalogData;
 
 /** 実物のカットは 6x6 の格子 (cutIndex 1〜36)。机は 10px ピッチ。 */
-const CUTS_PER_PAGE = 36;
+// 1 ページ = 15 スペース (a/b の 2 カットで 30 枚)。実物 (ComiketCircle) も
+// 1 ページ = 1 ブロックで、15〜18 スペースが入る。
+const SPACES_PER_PAGE = 15;
+const CUTS_PER_PAGE = SPACES_PER_PAGE * 2;
 const DESK_PITCH = 10;
 /** 実物の ComiketCircle の最初のページ。 */
 const FIRST_PAGE = 104;
@@ -100,15 +103,20 @@ describe('同梱のダミーカタログ — 実物の構造', () => {
     expect(DUMMY_CATALOG.label).toContain(`${catalog.circles.length} 件`);
   });
 
-  it('(blockId, spaceNo) はカタログ全体で一意で、番号は 1 から連番', () => {
-    const spots = placed.map((circle) => `${circle.blockId}-${circle.spaceNo}`);
+  it('(blockId, spaceNo, spaceNoSub) はカタログ全体で一意で、番号は 1 から連番', () => {
+    // 1 スペースに a と b の 2 サークルが入るので、一意なのは 3 つの組。
+    const spots = placed.map(
+      (circle) => `${circle.blockId}-${circle.spaceNo}-${circle.spaceNoSub}`,
+    );
     expect(new Set(spots).size).toBe(spots.length);
 
     for (const blockId of new Set(placed.map((circle) => circle.blockId))) {
-      const spaces = placed
-        .filter((circle) => circle.blockId === blockId)
-        .map((circle) => circle.spaceNo)
-        .sort(ascending);
+      // 同じスペースに a と b が入るので、番号は重複を除いて連番か見る。
+      const spaces = [
+        ...new Set(
+          placed.filter((circle) => circle.blockId === blockId).map((circle) => circle.spaceNo),
+        ),
+      ].sort(ascending);
       expect(spaces).toEqual(spaces.map((_, index) => index + 1));
     }
 
@@ -125,11 +133,12 @@ describe('同梱のダミーカタログ — 実物の構造', () => {
     const deskKeys = catalog.layouts.map(
       (layout) => `${layout.mapId}-${layout.blockId}-${layout.spaceNo}`,
     );
-    const spotKeys = placed.map(
+    // 机は 1 スペースに 1 つ (サークルは a/b の 2 件が同じ机を使う)。
+    const spotKeys = [...new Set(placed.map(
       (circle) => `${areaOf(circle.blockId).mapId}-${circle.blockId}-${circle.spaceNo}`,
-    );
+    ))];
 
-    expect(catalog.layouts).toHaveLength(placed.length);
+    expect(catalog.layouts).toHaveLength(spotKeys.length);
     expect(new Set(deskKeys).size).toBe(deskKeys.length);
     // サークルと机は 1 対 1。
     expect(new Set(deskKeys)).toEqual(new Set(spotKeys));
@@ -171,7 +180,7 @@ describe('同梱のダミーカタログ — 実物の構造', () => {
     }
   });
 
-  it('ページは 36 席そろい、日程ごとの連番になっている', () => {
+  it('ページは 30 席 (15 スペース x a/b) そろい、日程ごとの連番になっている', () => {
     const pages = new Map<number, Circle[]>();
     for (const circle of placed) {
       pages.set(circle.pageNo, [...(pages.get(circle.pageNo) ?? []), circle]);

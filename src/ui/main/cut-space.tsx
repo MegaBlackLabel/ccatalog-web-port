@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { CheckColor } from '../../app/catalog-state';
-import { checkColorHex, checkColorText } from '../check-colors';
+import { checkColorHex } from '../check-colors';
 import type { Circle } from '../../domain/types';
 
 /**
@@ -16,12 +16,20 @@ export const CUT_SPACE_BOX = {
   height: 143 / 903,
 } as const;
 
-/** ボックスの中に描くスペース番号の文字サイズ (原寸 178x253 のセル基準。実物も固定サイズ)。 */
-export const CUT_SPACE_FONT_SIZE = Math.max(8, Math.round(253 / 20));
+/**
+ * ボックスの中に描くスペース番号の文字サイズ。実物は数字がボックスいっぱいに入る
+ * (カットの画像 118x167 を 10 倍に拡大して実測: ボックス 25px に対し数字の高さ 22px = 88%)。
+ * カット 1 枚 (105x150) のボックスは 24px なので 21px にする。
+ */
+export const CUT_SPACE_FONT_SIZE = Math.round(CUT_SPACE_BOX.height * 150 * 0.88);
 
-/** 元実装と同じスペース番号の表記 (「12a」/「12b」)。 */
+/**
+ * スペース番号の表記。実物のカットの左上に出るのは数字だけ (「36」「37」) で、
+ * a / b の区別は付かない。b のサークルはそもそも番号ボックスを持たない
+ * (実測: a のセルにだけ見出し帯の左に区切り線がある)。
+ */
 export function cutSpaceLabel(circle: Pick<Circle, 'spaceNo' | 'spaceNoSub'>): string {
-  return `${circle.spaceNo}${circle.spaceNoSub === 1 ? 'b' : 'a'}`;
+  return String(circle.spaceNo);
 }
 
 const BASE_STYLE: CSSProperties = {
@@ -29,13 +37,21 @@ const BASE_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
+  // 実物の数字は太字で、線幅が文字高の 20%。Roboto Bold (700) が 16% で一番近い
+  // (実測: Roboto 400=8% / 500=14% / 700=16% / 900=43%)。
+  fontFamily: "'Roboto', 'Pixelated MS Sans Serif', sans-serif",
   fontWeight: 700,
   overflow: 'hidden',
 };
 
 export type CutSpaceBoxProps = {
-  /** 「12a」のようなスペース番号。 */
+  /** 「12」のようなスペース番号。 */
   space: string;
+  /**
+   * カット 1 枚の高さの倍率 (既定 1 = 105x150 のカット)。サークル詳細は
+   * カット欄が 214x304 なので 2.04 を渡し、番号も同じ比率で大きくする。
+   */
+  scale?: number;
   /** チェック色。渡すとその色で塗る (文字は色の明暗で白黒を選ぶ)。 */
   color?: CheckColor;
   /** 「色の設定」の 9 色 (動作設定)。未指定なら実物から実測した色。 */
@@ -49,7 +65,15 @@ export type CutSpaceBoxProps = {
  * カットの左上にあるスペース番号のボックス。チェック済みのカットはチェック色で塗る
  * (元実装のカットの見た目。色を指定していないサークルは標準色 = 緑)。
  */
-export function CutSpaceBox({ space, color, colors, className, style, ...rest }: CutSpaceBoxProps) {
+export function CutSpaceBox({
+  space,
+  color,
+  colors,
+  className,
+  scale = 1,
+  style,
+  ...rest
+}: CutSpaceBoxProps) {
   return (
     <span
       className={className}
@@ -59,10 +83,11 @@ export function CutSpaceBox({ space, color, colors, className, style, ...rest }:
         top: `${CUT_SPACE_BOX.top * 100}%`,
         width: `${CUT_SPACE_BOX.width * 100}%`,
         height: `${CUT_SPACE_BOX.height * 100}%`,
-        fontSize: CUT_SPACE_FONT_SIZE,
+        fontSize: Math.round(CUT_SPACE_FONT_SIZE * scale),
         ...(color === undefined
           ? null
-          : { background: checkColorHex(color, colors), color: checkColorText(color, colors) }),
+          // チェック色で塗っても文字は黒のまま (実物の数字はチェックの有無に関わらず黒)。
+          : { background: checkColorHex(color, colors), color: '#000000' }),
         ...style,
       }}
       {...rest}

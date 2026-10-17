@@ -5,6 +5,23 @@
   box-sizing: border-box;
 }
 
+/* react98retro は 98 風のスクロールバー (銀色の溝 + 矢印ボタン) を
+   `::-webkit-scrollbar` で描いている。ところが同じ CSS で `scrollbar-color` も
+   指定しており、Chrome 121 以降はこれが指定されていると `::-webkit-scrollbar` を
+   無視して OS 既定のスクロールバーを出す (実測 15px。webkit の指定が効いていれば
+   16px)。ここで `scrollbar-color` を auto に戻して、ライブラリの
+   ::-webkit-scrollbar をそのまま活かす (`scrollbar-width` は auto のままでよい)。 */
+.win98,
+.win98 * {
+  scrollbar-color: auto !important;
+}
+
+/* 画面下のタスクバー。react98retro の Taskbar はスタートボタンを必ず描くので、
+   置かない方針に合わせて隠す (メニューはメインウィンドウ側にある)。 */
+[data-taskbar-start] {
+  display: none !important;
+}
+
 html,
 body,
 #root {

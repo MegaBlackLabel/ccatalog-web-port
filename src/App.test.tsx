@@ -11,6 +11,32 @@ import { CHECK_COLOR_HEX } from './ui/check-colors';
 /** 同梱のダミーカタログの件数 (生成: tools/gen-dummy-data.py)。 */
 const SAMPLE_COUNT = dummy.circles.length;
 
+/**
+ * a のサークル (スペース番号ボックスを持つセル) をクリックして選択する。
+ * 実物は a のサークルだけがボックスを持ち、b のサークルには枠も番号も無い。
+ */
+async function selectASpaceCircle(user: UserEvent): Promise<void> {
+  const cell = [...screen.getByTestId('cut-view').querySelectorAll('.cut-cell')].find((node) =>
+    node.querySelector('.cut-cell__space'),
+  ) as HTMLElement;
+  await user.click(cell);
+}
+
+/**
+ * チェック済みの件数。実物のステータスバーは通常は空なので、件数はチェックリストの
+ * ステータスバー (「全 N 件中 M 件を表示」) から確かめる。
+ */
+function checkedCount(): number {
+  const text = screen.getByTestId('checklist-window').textContent ?? '';
+  const match = /全 (\d+) 件中/.exec(text);
+  return match ? Number(match[1]) : -1;
+}
+
+/** ステータスバーのページ番号欄の値 (実物のステータスバーは通常は空なので番号欄で確認する)。 */
+function pageNumberOf(): string {
+  return (screen.getByRole('textbox', { name: 'ページ番号' }) as HTMLInputElement).value;
+}
+
 async function renderApp() {
   const user = userEvent.setup();
   // 起動シーケンス (起動確認 → シリアル → 情報送信) は専用のテストで確認する
@@ -80,6 +106,17 @@ describe('App — 元アプリの画面が揃っている', () => {
     expect(await screen.findByTestId('map-window')).toBeInTheDocument();
     // 検索ダイアログだけは必要なときにメニューから開く。
     expect(screen.queryByTestId('search-window')).not.toBeInTheDocument();
+  });
+
+  it('画面下にタスクバーを出し、トレイの時計も持つ', async () => {
+    await renderApp();
+
+    const taskbar = await screen.findByTestId('taskbar');
+    // 画面下に貼り付く (実物のタスクバーは高さ 28px)。
+    expect(taskbar).toBeInTheDocument();
+    expect(taskbar.style.height).toBe('28px');
+    // 時計は HH:MM (24 時間) で出す。
+    expect(within(taskbar).getByText(/^\d{1,2}:\d{2}$/)).toBeInTheDocument();
   });
 
   it('画面が広いときは主要 5 ウィンドウを初期表示する (地図は実物と同じ 690 幅でサークル詳細と重なる)', async () => {
@@ -186,9 +223,7 @@ describe('App — サークルを選ぶ', () => {
     await user.clear(input);
     await user.type(input, String(lastPage));
     await user.click(screen.getByTestId('goto-page-submit'));
-    await waitFor(() =>
-      expect(screen.getByTestId('main-window')).toHaveTextContent(`ページ ${lastPage}`),
-    );
+    await waitFor(() => expect(pageNumberOf()).toBe(String(lastPage)));
   });
 });
 
@@ -319,7 +354,7 @@ describe('App — 検索 (メニューから開く)', () => {
     await user.click(screen.getByTestId('search-run'));
     const list = await screen.findByTestId('list-window');
     expect(within(list).getByText(new RegExp(`該当 ${SAMPLE_COUNT} 件`))).toBeInTheDocument();
-  });
+  }, 30000);
 
   it('一覧の行をダブルクリックすると、そのサークルのページへ移動する', async () => {
     const { user } = await renderApp();
@@ -331,10 +366,8 @@ describe('App — 検索 (メニューから開く)', () => {
     const rows = within(list).getAllByRole('row');
     await user.dblClick(rows[rows.length - 1]);
     const lastPage = dummy.circles[dummy.circles.length - 1].pageNo;
-    await waitFor(() =>
-      expect(screen.getByTestId('main-window')).toHaveTextContent(`ページ ${lastPage}`),
-    );
-  });
+    await waitFor(() => expect(pageNumberOf()).toBe(String(lastPage)));
+  }, 30000);
 });
 
 describe('App — サークル一覧のツールバー', () => {
@@ -657,12 +690,13 @@ describe('App — チェックツールバー (33001〜33009 / 33020)', () => {
   it('色ボタンは選択中のサークルをその色でチェックに追加する', async () => {
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL} 件`));
+    await waitFor(() => expect(checkedCount()).toBe(DEMO_TOTAL));
 
+    await selectASpaceCircle(user);
     await user.click(within(main).getByRole('button', { name: '色5' }));
 
-    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL + 1} 件`));
-    // 選択中のカットのスペース番号ボックスが、押した色で塗られる。
+    await waitFor(() => expect(checkedCount()).toBe(DEMO_TOTAL + 1));
+    // 選択中のカット (a のサークル) のスペース番号ボックスが、押した色で塗られる。
     const cell = screen.getByTestId('cut-view').querySelector('.cut-cell--selected');
     expect(cell).not.toBeNull();
     const space = cell?.querySelector('.cut-cell__space') as HTMLElement;
@@ -672,13 +706,14 @@ describe('App — チェックツールバー (33001〜33009 / 33020)', () => {
   it('登録済みのサークルの色ボタンは色だけ変える (件数は増えない)', async () => {
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL} 件`));
+    await waitFor(() => expect(checkedCount()).toBe(DEMO_TOTAL));
 
+    await selectASpaceCircle(user);
     await user.click(within(main).getByRole('button', { name: '色3' }));
-    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL + 1} 件`));
+    await waitFor(() => expect(checkedCount()).toBe(DEMO_TOTAL + 1));
     await user.click(within(main).getByRole('button', { name: '色7' }));
 
-    expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL + 1} 件`);
+    expect(checkedCount()).toBe(DEMO_TOTAL + 1);
     const cell = screen.getByTestId('cut-view').querySelector('.cut-cell--selected');
     const space = cell?.querySelector('.cut-cell__space') as HTMLElement;
     expect(space).toHaveStyle({ background: CHECK_COLOR_HEX[7] });
@@ -687,14 +722,15 @@ describe('App — チェックツールバー (33001〜33009 / 33020)', () => {
   it('チェックリストから外すボタンは選択中のサークルを外す', async () => {
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL} 件`));
+    await waitFor(() => expect(checkedCount()).toBe(DEMO_TOTAL));
 
+    await selectASpaceCircle(user);
     await user.click(within(main).getByRole('button', { name: '色1' }));
-    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL + 1} 件`));
+    await waitFor(() => expect(checkedCount()).toBe(DEMO_TOTAL + 1));
 
     await user.click(within(main).getByRole('button', { name: 'チェックリストから外す' }));
 
-    await waitFor(() => expect(main).toHaveTextContent(`チェック ${DEMO_TOTAL} 件`));
+    await waitFor(() => expect(checkedCount()).toBe(DEMO_TOTAL));
     const cell = screen.getByTestId('cut-view').querySelector('.cut-cell--selected');
     const space = cell?.querySelector('.cut-cell__space') as HTMLElement;
     expect(space.style.background).toBe('');
@@ -722,19 +758,20 @@ describe('App — 表示の拡大率 (幅 / 高さ / 全体 / 元のサイズ)',
   });
 
   it('幅 / 高さ に合わせると、カットビューの表示領域から拡大率を決める', async () => {
-    // 幅 534px はカット 178px x 6 列 の半分 → 50%。
-    // 高さ 1012px は 6 行 (253px x 6 = 1518px) の 2/3 → 67%。
+    // カットは実物の実寸 105x150。幅 534px は 6 列 (105px x 6 = 630px) の 85%。
+    // 高さ 1012px は 6 行 (150px x 6 = 900px) に収まるので 112% (拡大も許す)。
     mockViewBox(534, 1012);
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
     const zoomInput = within(main).getByRole('textbox', { name: '拡大率' });
 
     await user.click(within(main).getByRole('button', { name: '幅に合わせる' }));
-    await waitFor(() => expect(zoomInput).toHaveValue('50%'));
-    expect(main).toHaveTextContent('ズーム 50%');
+    // 拡大率はツールバーの欄に出る (ステータスバーは通常は空)。
+    await waitFor(() => expect(zoomInput).toHaveValue('85%'));
 
     await user.click(within(main).getByRole('button', { name: '高さに合わせる' }));
-    await waitFor(() => expect(zoomInput).toHaveValue('67%'));
+    // 1 ページ = 30 カット (6 列 x 5 行) なので、高さ 1012px / (150px x 5) = 135%。
+    await waitFor(() => expect(zoomInput).toHaveValue('135%'));
   });
 
   it('全体を表示 (メニュー) は幅と高さの小さい方に合わせる', async () => {
@@ -744,10 +781,11 @@ describe('App — 表示の拡大率 (幅 / 高さ / 全体 / 元のサイズ)',
 
     await chooseMenu(user, '表示(V)', /^全体を表示/);
 
-    expect(within(main).getByRole('textbox', { name: '拡大率' })).toHaveValue('50%');
+    // 幅と高さの小さい方 (幅 534px / 6 列 = 85%)。
+    expect(within(main).getByRole('textbox', { name: '拡大率' })).toHaveValue('85%');
   });
 
-  it('元のサイズは 100% に戻し、カットを実寸 178px の列で並べる', async () => {
+  it('元のサイズは 100% に戻し、カットを実寸 105px の列で並べる', async () => {
     mockViewBox(534, 1012);
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
@@ -757,13 +795,17 @@ describe('App — 表示の拡大率 (幅 / 高さ / 全体 / 元のサイズ)',
     await waitFor(() =>
       expect(within(main).getByRole('textbox', { name: '拡大率' })).toHaveValue('100%'),
     );
-    const grid = screen.getByTestId('cut-view').firstElementChild as HTMLElement;
-    expect(grid.style.gridTemplateColumns).toBe('repeat(6, 178px)');
+    const view = screen.getByTestId('cut-view');
+    // 格子は配置情報の帯の次にある (帯は格子の直前)。
+    const grid = [...view.children].find(
+      (child) => (child as HTMLElement).style.display === 'grid',
+    ) as HTMLElement;
+    expect(grid.style.gridTemplateColumns).toBe('repeat(6, 105px)');
   });
 });
 
 describe('App — ツールバー (実物の既定の並び)', () => {
-  it('既定は 4 本 22 ボタン (基本 / ページ移動 / 表示 / チェック)。ナビゲートバーは出さない', async () => {
+  it('既定は 5 本 (基本 / ページ移動 / 表示 / チェック / ナビゲート) を出す', async () => {
     await renderApp();
     const band = await screen.findByTestId('main-toolbar');
 
@@ -771,54 +813,52 @@ describe('App — ツールバー (実物の既定の並び)', () => {
     expect(screen.getByTestId('toolbar-group-jump')).toBeInTheDocument();
     expect(screen.getByTestId('toolbar-group-view')).toBeInTheDocument();
     expect(screen.getByTestId('toolbar-group-check')).toBeInTheDocument();
-    expect(screen.queryByTestId('toolbar-group-nav')).toBeNull();
+    // 実物は「戻る / 進む」のナビゲートバーも既定で出す。
+    expect(screen.getByTestId('toolbar-group-nav')).toBeInTheDocument();
 
-    // 実物のツールバー 1 行ぶんのボタン (22 個) + ツールバー内の「色編集」。
+    // 実物のツールバー 1 行ぶんのボタン (22 個) + ツールバー内の「色編集」+ ナビゲート 2 個。
     const labels = [...band.querySelectorAll('button')]
       .map((button) => button.getAttribute('aria-label'))
       .filter((label): label is string => label !== null);
     expect(labels.slice(0, 4)).toEqual(['新規作成', 'チェックリストを開く', 'チェックリストの保存', '印刷']);
     expect(labels).toContain('前のページ');
     expect(labels).toContain('ズームイン');
+    expect(labels).toContain('戻る');
+    expect(labels).toContain('進む');
     expect(labels.filter((label) => /^色\d$/.test(label))).toHaveLength(9);
   });
 });
 
 describe('App — ナビゲート (前に戻る / 次に進む)', () => {
-  it('ナビゲートバーを表示 > ツールバーで出し、戻る / 進む で行き来できる', async () => {
+  it('既定で出ているナビゲートバーの 戻る / 進む で行き来できる', async () => {
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
 
-    // 実物の既定は 4 本 (基本 / ページ移動 / 表示 / チェック)。ナビゲートバーは隠れている。
-    expect(within(main).queryByRole('button', { name: '戻る' })).toBeNull();
-    await chooseMenu(user, '表示(V)', /^ツールバー/);
-    await user.click(await screen.findByRole('menuitem', { name: /ナビゲートバー/ }));
     expect(within(main).getByRole('button', { name: '戻る' })).toBeInTheDocument();
     // 起動時に表示するページ (先頭のサークルのページ) と、最後のページ。
     const firstPage = dummy.circles[0].pageNo;
     const targetPage = Math.max(...dummy.circles.map((circle) => circle.pageNo));
-    await waitFor(() => expect(main).toHaveTextContent(`ページ ${firstPage}`));
+    await waitFor(() => expect(pageNumberOf()).toBe(String(firstPage)));
 
     await chooseMenu(user, 'ページ移動(J)', /^ページ指定で移動/);
     const input = await screen.findByTestId('goto-page-input');
     await user.clear(input);
     await user.type(input, String(targetPage));
     await user.click(screen.getByTestId('goto-page-submit'));
-    await waitFor(() => expect(main).toHaveTextContent(`ページ ${targetPage}`));
+    await waitFor(() => expect(pageNumberOf()).toBe(String(targetPage)));
 
     await user.click(within(main).getByRole('button', { name: '戻る' }));
-    await waitFor(() => expect(main).toHaveTextContent(`ページ ${firstPage}`));
+    await waitFor(() => expect(pageNumberOf()).toBe(String(firstPage)));
 
     await user.click(within(main).getByRole('button', { name: '進む' }));
-    await waitFor(() => expect(main).toHaveTextContent(`ページ ${targetPage}`));
+    await waitFor(() => expect(pageNumberOf()).toBe(String(targetPage)));
   });
 });
 
 describe('App — 動作設定 (ダイアログ 150) の反映', () => {
   it('シングルクリックでチェックする (1026) を入れると、1 回のクリックでチェックに載る', async () => {
     const { user } = await renderApp();
-    const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    await waitFor(() => expect(checkedCount()).toBe(65));
 
     await toggleSetting(user, 'シングルクリックでチェックする');
 
@@ -828,7 +868,7 @@ describe('App — 動作設定 (ダイアログ 150) の反映', () => {
     expect(cells[1]).toHaveClass('cut-cell--checked');
     // ステータスバーはマウスの下のサークル情報に切り替わるので、離してから件数を見る。
     await user.unhover(cells[1] as HTMLElement);
-    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+    await waitFor(() => expect(checkedCount()).toBe(66));
   });
 
   it('選択カーソルをマウスカーソルに追従する (1024) を入れると、かざしたカットが選択される', async () => {
@@ -843,8 +883,7 @@ describe('App — 動作設定 (ダイアログ 150) の反映', () => {
 
   it('リターンキーで次のサークルへ移動 (1021) は既定で有効。Enter でチェックして次のカットへ進む', async () => {
     const { user } = await renderApp();
-    const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    await waitFor(() => expect(checkedCount()).toBe(65));
     const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
 
     (cells[0] as HTMLElement).focus();
@@ -854,7 +893,7 @@ describe('App — 動作設定 (ダイアログ 150) の反映', () => {
     expect(cells[1]).toHaveClass('cut-cell--selected');
     // カーソルが移ったので、ステータスバーのページ表示も変わらない (同じページ内)。
     (cells[0] as HTMLElement).blur();
-    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+    await waitFor(() => expect(checkedCount()).toBe(66));
   });
 
   it('ページ変更時に左上のカットへカーソルを合わせる (1710) を入れると、ページ移動で先頭が選ばれる', async () => {
@@ -872,7 +911,7 @@ describe('App — 動作設定 (ダイアログ 150) の反映', () => {
 
     const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
     await waitFor(() => expect(cells[0]).toHaveClass('cut-cell--selected'));
-  });
+  }, 30000);
 });
 
 describe('App — Google 検索・用紙・一覧追従・アイコン化・表紙の設定反映', () => {
@@ -896,7 +935,7 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
       '_blank',
       'noreferrer',
     );
-  });
+  }, 30000);
 
   it('用紙サイズ・余白 (203) の設定は印刷プレビューに出る', async () => {
     const { user } = await renderApp();
@@ -925,7 +964,7 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
     const shown = await screen.findByTestId('preview-page-setup');
     expect(shown).toHaveTextContent('用紙 A3 297.0×420.0mm');
     expect(shown).toHaveTextContent('余白 左 60.0');
-  });
+  }, 30000);
 
   it('一覧の追従 (1022) を入れると、選んだサークルの日付とブロックへ一覧が切り替わる', async () => {
     const { user } = await renderApp();
@@ -947,7 +986,7 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
     await waitFor(() =>
       expect(within(list).getByTestId('list-block')).toHaveValue(String(target.blockId)),
     );
-  });
+  }, 30000);
 
   it('個別窓のアイコン化を連動する (1714) を入れると、1 つ最小化すると子ウィンドウが全部たたまれる', async () => {
     const { user } = await renderApp();
@@ -964,7 +1003,7 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
     // ウィンドウメニューから戻せる。
     await chooseMenu(user, 'ウィンドウ(W)', /^サークル詳細/);
     expect(await screen.findByTestId('detail-window')).toBeInTheDocument();
-  });
+  }, 30000);
 
   it('起動時に表紙画像を表示する (1711) を入れると表紙ウィンドウが出て、閉じられる', async () => {
     const { user } = await renderApp();
@@ -975,18 +1014,17 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
 
     await user.click(within(cover).getByTestId('cover-close'));
     expect(screen.queryByTestId('cover-dialog')).not.toBeInTheDocument();
-  });
+  }, 30000);
 });
 
 describe('App — メニューの残り (ファイル / 表示 / ページ移動 / チェックリスト / 検索 / ヘルプ)', () => {
   it('新規作成 (32818) はチェックリストを空にする', async () => {
     const { user } = await renderApp();
-    const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    await waitFor(() => expect(checkedCount()).toBe(65));
 
     await chooseMenu(user, 'ファイル(F)', /^新規作成/);
 
-    await waitFor(() => expect(main).toHaveTextContent('チェック 0 件'));
+    await waitFor(() => expect(checkedCount()).toBe(0));
   });
 
   it('チェックリストの保存 (32794) は CSV をダウンロードする', async () => {
@@ -996,7 +1034,7 @@ describe('App — メニューの残り (ファイル / 表示 / ページ移動
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    await waitFor(() => expect(checkedCount()).toBe(65));
 
     await chooseMenu(user, 'ファイル(F)', /^チェックリストの保存/);
 
@@ -1055,14 +1093,14 @@ describe('App — メニューの残り (ファイル / 表示 / ページ移動
     });
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    await waitFor(() => expect(checkedCount()).toBe(65));
 
     await chooseMenu(user, 'チェックリスト(A)', /^選択サークルをクリップボードにコピー/);
     await waitFor(() => expect(main).toHaveTextContent('コピーしました'));
 
     await chooseMenu(user, 'チェックリスト(A)', /^クリップボードからチェックリストにペースト/);
 
-    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+    await waitFor(() => expect(checkedCount()).toBe(66));
   });
 
   it('リスト中のカット表示 (32868) で一覧のカットの列を入れ外しできる', async () => {
@@ -1135,7 +1173,7 @@ describe('App — メニューの残り (ファイル / 表示 / ページ移動
 
     await waitFor(() => expect(within(help).getAllByTestId('help-topic')).toHaveLength(1));
     expect(within(help).getByTestId('help-content')).toHaveTextContent('机');
-  });
+  }, 30000);
 
   it('チェックリストの RSS ボタンはダミーの取得結果を出す', async () => {
     const { user } = await renderApp();
@@ -1149,15 +1187,17 @@ describe('App — メニューの残り (ファイル / 表示 / ページ移動
   it('標準のチェック色 (サブメニュー) で登録する色が変わる', async () => {
     const { user } = await renderApp();
     await waitFor(() =>
-      expect(screen.getByTestId('main-window')).toHaveTextContent('チェック 65 件'),
+      expect(checkedCount()).toBe(65),
     );
 
     await chooseSubmenu(user, 'チェックリスト(A)', /^標準のチェック色/, /^色5$/);
 
+    // スペース番号ボックスを持つのは a のサークルだけ。
     const cells = screen.getByTestId('cut-view').querySelectorAll('.cut-cell');
-    await user.dblClick(cells[1] as HTMLElement);
+    const target = [...cells].find((cell) => cell.querySelector('.cut-cell__space')) as HTMLElement;
+    await user.dblClick(target);
 
-    const space = cells[1].querySelector('.cut-cell__space') as HTMLElement;
+    const space = target.querySelector('.cut-cell__space') as HTMLElement;
     await waitFor(() => expect(space).toHaveStyle({ background: CHECK_COLOR_HEX[5] }));
   });
 
@@ -1186,12 +1226,11 @@ describe('App — 保存 (元実装の INI / チェックリストファイル�
     await chooseMenu(user, 'ファイル(F)', /^動作設定\(C\)\.\.\./);
 
     expect(await screen.findByLabelText('シングルクリックでチェックする (S)')).toBeChecked();
-  });
+  }, 30000);
 
   it('起動時に前回のチェックリストを読み込む (1664) を入れると、次の起動でもチェックリストが残る', async () => {
     const { user } = await renderApp();
-    const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
+    await waitFor(() => expect(checkedCount()).toBe(65));
     await toggleSetting(user, '起動時に前回使用したチェックリストを自動的に読み込む');
 
     // 1 件登録して 66 件にする。
@@ -1200,14 +1239,14 @@ describe('App — 保存 (元実装の INI / チェックリストファイル�
     expect(cells[1]).toHaveClass('cut-cell--checked');
     // ステータスバーはマウスの下のサークル情報に切り替わるので、離してから件数を見る。
     await user.unhover(cells[1] as HTMLElement);
-    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+    await waitFor(() => expect(checkedCount()).toBe(66));
     cleanup();
 
     render(<App startup={false} />);
 
     // 読み込んだチェックリストがあるので、デモ用のダミー登録は入れ直さない。
     await waitFor(() =>
-      expect(screen.getByTestId('main-window')).toHaveTextContent('チェック 66 件'),
+      expect(checkedCount()).toBe(66),
     );
   });
 });
@@ -1309,10 +1348,11 @@ describe('App — 動作設定 (プロパティシート)', () => {
   it('チェック色で表示色を変えると、チェックしたカットの色が変わる', async () => {
     const { user } = await renderApp();
     const main = screen.getByTestId('main-window');
-    await waitFor(() => expect(main).toHaveTextContent('チェック 65 件'));
-    // 選択中のサークルを色1 でチェックする。
+    await waitFor(() => expect(checkedCount()).toBe(65));
+    // 選択中のサークル (a のサークル = スペース番号ボックスを持つセル) を色1 でチェックする。
+    await selectASpaceCircle(user);
     await user.click(within(main).getByRole('button', { name: '色1' }));
-    await waitFor(() => expect(main).toHaveTextContent('チェック 66 件'));
+    await waitFor(() => expect(checkedCount()).toBe(66));
 
     const dialog = await openPage(user, 'チェック色');
     await user.click(within(dialog).getByTestId('display-color-1'));

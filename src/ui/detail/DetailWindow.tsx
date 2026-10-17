@@ -91,16 +91,16 @@ export type DetailWindowProps = {
  * (ライブラリのツールバー ボタンと同じ)・左右 9px の余白に
  * 広げて押しやすくしてある (幅は文字に合わせて伸ばす)。
  *
- * カット欄はカット画像の実寸に合わせる。実物のカット域は x 7..221 の 214x302 だが、
- * 置かれるカット画像の原寸は 178x253 (catalog の cutSizeW/H) で、幅 1186px のウィンドウでも
- * 幅 400〜440px のウィンドウ (`img2-detail.txt` と CHM の WINDOW3.PNG) でも原寸のまま描かれる。
- * 214px の欄に 178px の画像を入れていたので、画像の右と下に白い余白が出ていた。
- * ウィンドウ幅に対する比率より「余白が出ないこと」を優先し、欄も枠も画像の実寸 (178x253) にする。
+ * カット欄は実物と同じ 214px 固定にする。実物のカット域は x 7..221 の 214px
+ * (`3-サークル詳細.png` / `analysis/img2-detail.txt` の実測で、アプリ版のカットは
+ * この欄いっぱいまで拡大される)。置かれるカット画像の原寸は 178x253 (catalog の
+ * cutSizeW/H) なので、欄の中で同じ縦横比のまま 214x304 に拡大する。
  */
 
-/** カット画像の実寸 (catalog の cutSizeW/H と同じ 178x253)。カット欄と枠もこの大きさにする。 */
-const CUT_WIDTH = 178;
-const CUT_HEIGHT = 253;
+/** カット欄の幅。実物のカット域 (x 7..221) と同じ 214px 固定。 */
+const CUT_WIDTH = 214;
+/** カット欄の高さ。原寸 178x253 を幅 214 に合わせて拡大した 304px (同じ縦横比)。 */
+const CUT_HEIGHT = 304;
 
 /** 上部の帯 (カット + サークル詳細情報) の高さ。実測 302/995 = 30%。 */
 const MAIN_ROW_HEIGHT = '30%';
@@ -204,7 +204,7 @@ const MAIN_ROW_STYLE: CSSProperties = {
   minWidth: 0,
 };
 
-/** カット欄 (画像の実寸 178px)。枠と同じ幅にして、画像の右に余白を出さない。 */
+/** カット欄 (実物と同じ 214px 固定)。枠も同じ幅にして、画像の右に余白を出さない。 */
 const CUT_COLUMN_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -214,7 +214,7 @@ const CUT_COLUMN_STYLE: CSSProperties = {
   overflow: 'hidden',
 };
 
-/** カットの枠。画像の実寸 (178x253) そのものにして、上下左右に余白を出さない。 */
+/** カットの枠。実物のカット域 (214x304) そのものにして、上下左右に余白を出さない。 */
 const CUT_FRAME_STYLE: CSSProperties = {
   flex: '0 0 auto',
   width: CUT_WIDTH,
@@ -578,13 +578,20 @@ export function DetailWindow({
                     height={CUT_HEIGHT}
                     style={CUT_IMAGE_STYLE}
                   />
-                  {/* 実物のカットは左上にスペース番号のボックスがある。チェック済みは
-                      チェックリストの色で塗る (サークルカット ウィンドウと同じ)。 */}
-                  <CutSpaceBox
-                    data-testid="detail-cut-space"
-                    space={cutSpaceLabel(circle)}
-                    color={checked ? checkColor : undefined}
-                  />
+                  {/*
+                    実物のカットは左上にスペース番号のボックスがある。チェック済みは
+                    チェックリストの色で塗る。番号を出すのは a のサークルだけ
+                    (サークルカット ウィンドウと同じ)。カット欄が 214x304 なので
+                    番号も同じ比率で大きくする。
+                  */}
+                  {circle.spaceNoSub === 0 ? (
+                    <CutSpaceBox
+                      data-testid="detail-cut-space"
+                      space={cutSpaceLabel(circle)}
+                      color={checked ? checkColor : undefined}
+                      scale={CUT_WIDTH / 105}
+                    />
+                  ) : null}
                 </>
               ) : (
                 <div data-testid="detail-cut-placeholder" style={CUT_BOX_STYLE}>
