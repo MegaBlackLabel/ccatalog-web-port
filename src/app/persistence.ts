@@ -98,11 +98,27 @@ function normalizeListDisplay(saved: ListDisplaySettings | undefined): ListDispl
   const isLegacyDefault =
     checklist.length === LEGACY_CHECKLIST_DEFAULT.length &&
     checklist.every((key, index) => key === LEGACY_CHECKLIST_DEFAULT[index]);
+  const list = known(saved.list);
+  const isLegacyListDefault =
+    list.length === LEGACY_LIST_DEFAULT.length &&
+    list.every((key, index) => key === LEGACY_LIST_DEFAULT[index]);
   return {
     checklist: isLegacyDefault ? [...DEFAULT_LIST_DISPLAY_SETTINGS.checklist] : checklist,
-    list: known(saved.list),
+    list: isLegacyListDefault ? [...DEFAULT_LIST_DISPLAY_SETTINGS.list] : list,
   };
 }
+
+/** 以前のサークル一覧の既定 (8 列)。実物の 18 列に増えたので移行する。 */
+const LEGACY_LIST_DEFAULT: readonly ListColumnKey[] = [
+  'day',
+  'space',
+  'genre',
+  'cut',
+  'name',
+  'kana',
+  'pen',
+  'book',
+];
 
 /** 以前のチェックリストの既定 (参加日 / スペース / ジャンル / カット / サークル名 / …)。 */
 const LEGACY_CHECKLIST_DEFAULT: readonly ListColumnKey[] = [

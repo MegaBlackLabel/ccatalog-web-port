@@ -13,9 +13,16 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
+  /* 下地の色を html / body にも入れる。.desktop が viewport より小さく描かれたり
+     内容がはみ出したときに、下から白 (ブラウザ既定) が見えないようにする。 */
+  background: #008080;
 }
 
 .desktop {
+  /* viewport に固定する。height: 100vh だけだと、拡大やスクロールで
+     viewport の高さがずれたときに下が白く抜ける。 */
+  position: fixed;
+  inset: 0;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -102,12 +109,18 @@ body,
   margin: 0 !important;
 }
 
-/* 見出し行はスクロールしても固定する (実物はヘッダが動かない)。
-   98.css も thead に sticky を当てるが、table 自身が overflow を持つため効かない。 */
+/* 見出し行はスクロールしても固定する (実物はヘッダが動かない)。98.css も thead に
+   sticky を当てるが効かない。ライブラリの見出しセル (`.headerCell`) が
+   `position: relative` と `overflow: hidden` を持つので、!important で上書きする
+   (このセレクタは CSS モジュールのハッシュ付きクラス名に依存しない)。 */
 [data-testid='checklist-window'] > .window-body table > thead > tr > * {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 2 !important;
+  /* 見出しの背景はライブラリ (`.headerCell`) の銀色。ここで !important を付けると
+     その銀色を上書きしてしまうので、同じ #c0c0c0 を明示して固定時も透けないようにする
+     (透明にすると、スクロールした行が固定した見出しの下から透けて見える)。 */
+  background: #c0c0c0 !important;
 }
 
 /* 表の右端はウィンドウの枠 (sunken-panel) が受け持つので二重線にしない。 */
@@ -128,10 +141,17 @@ body,
 }
 
 /* 行の高さは罫線を含めて 17px (98.css の tbody は 14px)。box-sizing は
-   app.css の `*` で border-box なので、罫線を引いても 17px のまま収まる。 */
+   app.css の `*` で border-box なので、罫線を引いても 17px のまま収まる。
+   ただしサークルカットの行は画像 (69x92) に合わせて伸ばす (実物はカット 66 の行が 73。
+   同じ比でカット 92 の行は 102)。table-cell の min-height は効かないので height で指定する。 */
 [data-testid='list-window'] .window-body table > tbody > tr > * {
   height: 17px;
-  line-height: 16px;
+  vertical-align: middle;
+}
+
+/* カットを持つ行だけ高さを合わせる。 */
+[data-testid='list-window'] .window-body table > tbody > tr:has(img[data-testid='list-cut']) > * {
+  height: 102px;
 }
 
 /* 表の右端はウィンドウの枠 (sunken-panel) が受け持つので二重線にしない。 */

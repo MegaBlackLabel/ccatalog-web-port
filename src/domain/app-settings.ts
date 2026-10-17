@@ -151,17 +151,22 @@ export type ListColumnKey =
   | 'kana'
   | 'pen'
   | 'book'
+  | 'url'
+  | 'mail'
+  | 'twitter'
+  | 'pixiv'
   | 'description'
   | 'memo'
   | 'updateInfo'
+  | 'webCatalog'
   | 'updateStatus'
-  | 'url'
-  | 'mail';
+  | 'circleMs';
 
 /**
  * 列の表示名 (ダイアログ 210 のリスト項目)。実物の項目名に合わせる
  * (実物のリストは 参加日 / スペース / ジャンル / サークルカット / サークル名 / 読みがな /
- *  執筆者 / 発行誌 / URL / Mail …)。補足 / メモ は実物のリストでは下に隠れている項目。
+ *  執筆者 / 発行誌 / URL / Mail / Twitter / Pixiv / 補足 / メモ / 更新情報 /
+ *  WebCatalog / 更新状態 / Circle.ms の 18 項目)。
  */
 export const LIST_COLUMN_LABELS: Record<ListColumnKey, string> = {
   color: 'チェック色',
@@ -173,16 +178,20 @@ export const LIST_COLUMN_LABELS: Record<ListColumnKey, string> = {
   kana: '読みがな',
   pen: '執筆者',
   book: '発行誌',
+  url: 'URL',
+  mail: 'Mail',
+  twitter: 'Twitter',
+  pixiv: 'Pixiv',
   description: '補足',
   memo: 'メモ',
   updateInfo: '更新情報',
+  webCatalog: 'WebCatalog',
   updateStatus: '更新状態',
-  url: 'URL',
-  mail: 'Mail',
+  circleMs: 'Circle.ms',
 };
 
 /**
- * ダイアログ 210 のリストに並べる項目の順 (実物の 10 項目)。
+ * ダイアログ 210 のリストに並べる項目の順 (実物の 18 項目 = サークル一覧の列と同じ順)。
  * 表示 / 非表示と並びはこの順を基準にする。
  */
 export const LIST_COLUMN_ORDER: readonly ListColumnKey[] = [
@@ -194,12 +203,16 @@ export const LIST_COLUMN_ORDER: readonly ListColumnKey[] = [
   'kana',
   'pen',
   'book',
+  'url',
+  'mail',
+  'twitter',
+  'pixiv',
   'description',
   'memo',
   'updateInfo',
+  'webCatalog',
   'updateStatus',
-  'url',
-  'mail',
+  'circleMs',
 ];
 
 /**
@@ -227,8 +240,28 @@ export const DEFAULT_LIST_DISPLAY_SETTINGS: ListDisplaySettings = {
     'updateInfo',
     'updateStatus',
   ],
-  // サークル一覧は実物のダイアログ 210 の並び。
-  list: ['day', 'space', 'genre', 'cut', 'name', 'kana', 'pen', 'book'],
+  // サークル一覧は実物のウィンドウ (1WINDOW/6LIST.HTM) の列と同じ 18 列
+  // (実物のスクリーンショットから 1 列ずつ読み取った並び)。
+  list: [
+    'day',
+    'space',
+    'genre',
+    'cut',
+    'name',
+    'kana',
+    'pen',
+    'book',
+    'url',
+    'mail',
+    'twitter',
+    'pixiv',
+    'description',
+    'memo',
+    'updateInfo',
+    'webCatalog',
+    'updateStatus',
+    'circleMs',
+  ],
 };
 
 /**

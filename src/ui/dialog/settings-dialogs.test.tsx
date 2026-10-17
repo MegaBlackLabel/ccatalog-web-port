@@ -360,7 +360,7 @@ describe('PreferencesDialog', () => {
     expect(browseRow.style.justifyContent).toBe('flex-end');
   });
 
-  it('リスト表示の項目は実物の 14 項目 (この順) で、ボタンと注記も実物どおり', async () => {
+  it('リスト表示の項目は実物の 18 項目 (この順) で、ボタンと注記も実物どおり', async () => {
     const { user, dialog } = renderPreferences();
     const tab = within(dialog).getByRole('tab', { name: 'リスト表示' });
     await user.click(tab.querySelector('a') ?? tab);
@@ -368,8 +368,8 @@ describe('PreferencesDialog', () => {
     const rows = [...byControlId(dialog, 1694).querySelectorAll('[data-testid^="column-row-"]')].map(
       (row) => (row.getAttribute('data-testid') ?? '').replace('column-row-', ''),
     );
-    // 表示中の項目が先、非表示の項目が末尾 (並びはダイアログ 210 の項目順)。
-    expect(rows).toHaveLength(14);
+    // 1694 はチェックリスト側のリスト。既定の 8 項目が先、非表示の 10 項目が末尾
+    // (並びはダイアログ 210 の項目順)。
     expect(rows.slice(0, 8)).toEqual([
       'space',
       'cut',
@@ -380,7 +380,18 @@ describe('PreferencesDialog', () => {
       'updateInfo',
       'updateStatus',
     ]);
-    expect(rows.slice(8)).toEqual(['day', 'genre', 'kana', 'pen', 'url', 'mail']);
+    expect(rows.slice(8)).toEqual([
+      'day',
+      'genre',
+      'kana',
+      'pen',
+      'url',
+      'mail',
+      'twitter',
+      'pixiv',
+      'webCatalog',
+      'circleMs',
+    ]);
     // ラベルは実物の項目名。
     for (const label of [
       '参加日',
@@ -391,12 +402,16 @@ describe('PreferencesDialog', () => {
       '読みがな',
       '執筆者',
       '発行誌',
+      'URL',
+      'Mail',
+      'Twitter',
+      'Pixiv',
       '補足',
       'メモ',
       '更新情報',
+      'WebCatalog',
       '更新状態',
-      'URL',
-      'Mail',
+      'Circle.ms',
     ]) {
       expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
     }

@@ -103,6 +103,14 @@ export type ChecklistListRow = {
   url: string;
   /** Mail (DB の mailAddr)。 */
   mail: string;
+  /** Twitter (DB の twitter)。 */
+  twitter: string;
+  /** Pixiv (DB の pixiv)。 */
+  pixiv: string;
+  /** WebCatalog (DB の circlems)。 */
+  webCatalog: string;
+  /** Circle.ms (DB の rss)。 */
+  circleMs: string;
 };
 
 /** チェック色の見本色 (0 は標準色 = 緑)。定義は 5 ウィンドウ共通 (ui/check-colors.ts)。 */
@@ -134,6 +142,12 @@ const CHECKLIST_COLUMN_DEFS: Record<Exclude<ListColumnKey, 'color'>, TableColumn
   memo: { key: 'memo', header: 'メモ', width: 200, render: (value) => renderText(value) },
   updateInfo: { key: 'updateInfo', header: '更新情報', width: 200, render: (value) => renderText(value) },
   updateStatus: { key: 'updateStatus', header: '更新状態', width: 120, render: (value) => renderText(value) },
+  twitter: { key: 'twitter', header: 'Twitter', width: 160, render: (value) => renderText(value) },
+  pixiv: { key: 'pixiv', header: 'Pixiv', width: 160, render: (value) => renderText(value) },
+  // 実物の DB は webcatalog.circle.ms の URL を circlems 列に、portal.circle.ms の
+  // URL を rss 列に入れている (一覧ウィンドウと同じ扱い)。
+  webCatalog: { key: 'webCatalog', header: 'WebCatalog', width: 160, render: (value) => renderText(value) },
+  circleMs: { key: 'circleMs', header: 'Circle.ms', width: 160, render: (value) => renderText(value) },
   url: { key: 'url', header: 'URL', width: 160, render: (value) => renderText(value) },
   mail: { key: 'mail', header: 'Mail', width: 160, render: (value) => renderText(value) },
   cut: {
@@ -290,6 +304,12 @@ export function ChecklistWindow({
     updateStatus: circle.updateFlag === 0 ? '' : '更新あり',
     url: circle.url,
     mail: circle.mailAddr,
+    twitter: circle.twitter,
+    pixiv: circle.pixiv,
+    // 実物の DB は webcatalog.circle.ms の URL を circlems 列に、portal.circle.ms の
+    // URL を rss 列に入れている (ComiketCircle.tsv の実データで確認)。
+    webCatalog: circle.circlems,
+    circleMs: circle.rss,
   }));
 
   const hasSelection = selectedIds.length > 0;

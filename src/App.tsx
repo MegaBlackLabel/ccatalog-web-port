@@ -4,6 +4,7 @@ import '@megablacklabel/react98retro/style.css';
 import './styles/app.css';
 import { useCatalog } from './app/use-catalog';
 import { loadPersistedState, savePersistedState } from './app/persistence';
+import { WEEKDAY_NAMES, WEEKDAY_SHORT } from './domain/weekday';
 import type { CheckColor, ChecklistEntry } from './app/catalog-state';
 import { MENU_COMMANDS } from './ui/menu/menu-defs';
 import { WINDOW_MENU_COMMANDS } from './ui/menu/to-menu-bar';
@@ -170,12 +171,6 @@ const LAYOUT_COMPACT: Record<LayoutName, WindowBox> = {
 const COMMAND_JUMP_DAY = 34000;
 const COMMAND_JUMP_HALL = 34100;
 const COMMAND_JUMP_INDEX = 34300;
-
-/** `ComiketDate.weekday` の表記 (実物 DB は 1=日 … 7=土)。元実装のコンボは「金曜日」を出す。 */
-const WEEKDAY_NAMES = ['', '日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'] as const;
-
-/** 同じ曜日の略称 (印刷プレビューの見出し「1日目 （金）」に使う)。 */
-const WEEKDAY_SHORT = ['', '日', '月', '火', '水', '木', '金', '土'] as const;
 
 /** 起動シーケンス (元実装: 起動確認 → シリアル番号 → 情報送信)。 */
 type StartupStep = 'confirm' | 'serial' | 'sendInfo' | 'done';
@@ -1640,6 +1635,8 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
           circles={circles}
           results={state.results}
           genres={genres}
+          blocks={catalog?.blocks ?? []}
+          dates={catalog?.dates ?? []}
           selectedId={state.selectedId}
           status={state.status}
           onSelect={(id) => dispatch({ type: 'circle/select', id })}

@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Circle, Genre } from '../../domain/types';
+import type { BlockInfo, Circle, DateInfo, Genre } from '../../domain/types';
 import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkSwatchIcon } from '../check-colors';
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
 import { ListWindow } from './ListWindow';
@@ -13,6 +13,16 @@ afterEach(() => {
 });
 
 const GENRES: Genre[] = [{ id: 14, name: '創作(少女)', code: 112 }];
+/** ブロック (ComiketBlock)。ツールバーのブロックは実物と同じ名前で出る。 */
+const BLOCKS: BlockInfo[] = [
+  { id: 1, name: 'あ', areaId: 2 },
+  { id: 2, name: 'い', areaId: 2 },
+];
+/** 日程 (ComiketDate)。ツールバーの日付は実物と同じ曜日で出る。 */
+const DATES: DateInfo[] = [
+  { id: 1, year: 2019, month: 8, day: 9, weekday: 6 },
+  { id: 2, year: 2019, month: 8, day: 10, weekday: 7 },
+];
 /** 色1〜色9 の名称 (index 0 が「色1」)。 */
 const COLOR_NAMES = ['赤', '橙', '黄', '緑', '水', '青', '紫', '桃', '灰'];
 
@@ -90,6 +100,8 @@ function renderList(overrides: Partial<ListWindowProps> = {}) {
     // 既定は「検索を実行した後」の状態 (アプリは検索結果を一覧に出す)。
     results: CIRCLES,
     genres: GENRES,
+    blocks: BLOCKS,
+    dates: DATES,
     selectedId: null,
     status: '該当 2 件',
     onSelect: vi.fn(),
@@ -192,23 +204,41 @@ function rowItems(row: HTMLElement): string[] {
 }
 
 describe('ListWindow', () => {
-  it('サークル一覧の 7 列とステータスバーを表示する', () => {
+  it('サークル一覧の 18 列とステータスバーを表示する', () => {
     const { list } = renderList();
 
     expect(within(list).getByText('サークル一覧')).toBeInTheDocument();
-    // 並びは実物のダイアログ 210 (リスト表示) の項目順。
+    // 実物のウィンドウ (1WINDOW/6LIST.HTM) の列と同じ 18 列・同じ並び。
     expect(within(list).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
-      '日付',
-      '位置',
+      '参加日',
+      'スペース',
       'ジャンル',
-      'カット',
+      'サークルカット',
       'サークル名',
-      '読み',
+      '読みがな',
       '執筆者',
       '発行誌',
+      'URL',
+      'Mail',
+      'Twitter',
+      'Pixiv',
+      '補足',
+      'メモ',
+      '更新情報',
+      'WebCatalog',
+      '更新状態',
+      'Circle.ms',
     ]);
     expect(within(list).getByText('該当 2 件')).toBeInTheDocument();
     expect(within(list).getByText('表示 2 件')).toBeInTheDocument();
+  });
+
+  it('サークルカット列は実物の比率 (69x92) で、行の高さもそれに合わせる', () => {
+    const { list } = renderList();
+
+    const image = within(list).getAllByTestId('list-cut')[0] as HTMLImageElement;
+    expect(image.style.width).toBe('69px');
+    expect(image.style.height).toBe('92px');
   });
 
   it('1 行 1 サークルで日付・ジャンル・スペース番号を表示する', () => {
@@ -439,8 +469,9 @@ describe('ListWindow', () => {
       '検索結果',
     ]);
     // 抽選漏れ (day 0) は専用のモードで見るので日付には出さない。
-    expect(optionLabels(screen.getByTestId('list-day'))).toEqual(['1日目', '2日目']);
-    expect(optionLabels(screen.getByTestId('list-block'))).toEqual(['A', 'B']);
+    // 日付は実物と同じ曜日、ブロックは実物と同じ名前で出す。
+    expect(optionLabels(screen.getByTestId('list-day'))).toEqual(['金曜日', '土曜日']);
+    expect(optionLabels(screen.getByTestId('list-block'))).toEqual(['あ', 'い']);
   });
 
   it('既定は「日付／ブロック指定」で、最初の日付とブロックのサークルを出す', () => {
@@ -456,24 +487,56 @@ describe('ListWindow', () => {
     await user.selectOptions(screen.getByTestId('list-block'), '2');
     expect(listedNames(list)).toEqual(['あ行B']);
 
-    // ブロックは日付ごとに違うので、日付を変えるとその日のブロックに切り替わる。
+    // ブロックは日付ごとに違うので、日付を変えると選択は初期値に戻る。
+    // 選択肢は実物と同じくカタログの全ブロック (ここでは「あ」「い」の 2 つ)。
     await user.selectOptions(screen.getByTestId('list-day'), '2');
-    expect(optionLabels(screen.getByTestId('list-block'))).toEqual(['A']);
+    expect(optionLabels(screen.getByTestId('list-block'))).toEqual(['あ', 'い']);
     expect(listedNames(list)).toEqual(['さ行2']);
   });
 
-  it('「日付／インデックス」は読みの 1 文字目が同じかな行を出す', async () => {
+  it('「日付／インデックス」の 3 つ目は実物のブロック名 (あ〜れ / Ａ〜Ｒ / ア〜リ) を出す', async () => {
     const { user, list } = renderList({ circles: MODE_CIRCLES, results: null });
 
     await user.selectOptions(screen.getByTestId('list-mode'), 'dateIndex');
-    expect(optionLabels(screen.getByTestId('list-index'))).toEqual(['あ', 'か']);
-    expect(listedNames(list)).toEqual(['あ行1', 'あ行B']);
+    // 実物の ComiketBlock は「あ」〜「れ」→「Ａ」〜「Ｒ」→「ア」〜「リ」の 100 個。
+    // インデックスはその名前そのもの (このフィクスチャは「あ」「い」の 2 つ)。
+    expect(optionLabels(screen.getByTestId('list-index'))).toEqual(['あ', 'い']);
+    // 先頭のブロック (「あ」) を出す。
+    expect(listedNames(list)).toEqual(['あ行1', 'か行1']);
 
-    await user.selectOptions(screen.getByTestId('list-index'), 'か');
-    expect(listedNames(list)).toEqual(['か行1']);
+    await user.selectOptions(screen.getByTestId('list-index'), '2');
+    expect(listedNames(list)).toEqual(['あ行B']);
 
+    // 日付を変えるとその日のブロックに切り替わる。
     await user.selectOptions(screen.getByTestId('list-day'), '2');
     expect(listedNames(list)).toEqual(['さ行2']);
+  });
+
+  it('実物のブロック名 (100 個) をそのままインデックスに出す', async () => {
+    // 実物の ComiketBlock と同じ並びの一部を渡し、名前がそのまま出ることを確かめる。
+    const blocks: BlockInfo[] = [
+      { id: 1, name: 'あ', areaId: 2 },
+      { id: 2, name: 'れ', areaId: 2 },
+      { id: 3, name: 'Ａ', areaId: 2 },
+      { id: 4, name: 'Ｒ', areaId: 2 },
+      { id: 5, name: 'ア', areaId: 2 },
+      { id: 6, name: 'リ', areaId: 2 },
+    ];
+    const circles = blocks.map((block, index) =>
+      makeCircle(20 + index, { day: 1, blockId: block.id, circleName: `サークル${block.name}` }),
+    );
+
+    const { user } = renderList({ circles, results: null, blocks, dates: DATES });
+    await user.selectOptions(screen.getByTestId('list-mode'), 'dateIndex');
+
+    expect(optionLabels(screen.getByTestId('list-index'))).toEqual([
+      'あ',
+      'れ',
+      'Ａ',
+      'Ｒ',
+      'ア',
+      'リ',
+    ]);
   });
 
   it('「抽選漏れサークル」にすると day 0 のサークルだけになる', async () => {

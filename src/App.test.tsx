@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import dummy from './data/fixtures/dummy-catalog.json';
 import { DEFAULT_SEARCH_CONDITION, searchCircles } from './domain/search';
-import { normalize } from './domain/normalize';
 import { SEARCH_FIELDS } from './domain/search-fields';
 import type { CatalogData } from './domain/types';
 import { CHECK_COLOR_HEX } from './ui/check-colors';
@@ -379,25 +378,33 @@ describe('App — サークル一覧のツールバー', () => {
     const cells = listedCells(list);
     expect(cells).toHaveLength(expected);
     // 日付の列。
-    expect(listedColumn(list, '日付').every((cell) => cell === `${day}日目`)).toBe(true);
+    expect(listedColumn(list, '参加日').every((cell) => cell === `${day}日目`)).toBe(true);
   });
 
-  it('表示モードを「日付／インデックス」にすると、選んだ読みのかな行だけを出す', async () => {
+  it('表示モードを「日付／インデックス」にすると、選んだインデックスのサークルだけを出す', async () => {
     const { user } = await renderApp();
     const list = await openList();
 
     await user.selectOptions(within(list).getByTestId('list-mode'), 'dateIndex');
-    await user.selectOptions(within(list).getByTestId('list-index'), 'あ');
+    // 3 つ目は実物のブロック名 (あ〜れ / Ａ〜Ｒ / ア〜リ) をそのまま出す。
+    const index = within(list).getByTestId('list-index') as HTMLSelectElement;
+    const labels = [...index.options].map((option) => option.text);
+    expect(labels[0]).toBe('あ');
+    expect(labels).toContain('れ');
+    expect(labels).toContain('Ｒ');
+    expect(labels).toContain('ア');
+    expect(labels).toContain('リ');
+    // 配置のあるブロックを選ぶ (実物は配置の無いブロックを選ぶと 0 件になる)。
+    const withCircles = [...index.options].find((option) =>
+      dummy.circles.some((circle) => circle.blockId === Number(option.value) && circle.day === 1),
+    );
+    expect(withCircles).toBeDefined();
+    await user.selectOptions(index, withCircles!.value);
 
     const cells = listedCells(list);
     expect(cells.length).toBeGreaterThan(0);
     // すべて既定の日付 (1 日目) のサークル。
-    expect(listedColumn(list, '日付').every((cell) => cell === '1日目')).toBe(true);
-    // 読みの 1 文字目はすべて「あ」行 (あいうえお + 小書き)。
-    const aRow = normalize('あいうえおぁぃぅぇぉ');
-    expect(
-      listedColumn(list, '読み').every((cell) => aRow.includes(normalize(cell.charAt(0)))),
-    ).toBe(true);
+    expect(listedColumn(list, '参加日').every((cell) => cell === '1日目')).toBe(true);
   });
 
   it('簡易検索ボックスはリターンキーで検索を実行し、件数をステータスバーに出す', async () => {
