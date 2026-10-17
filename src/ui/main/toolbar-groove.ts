@@ -82,10 +82,9 @@ export const TOOLBAR_TEXT_BUTTON_PADDING_X = 9;
 
 /**
  * 文字を持つツールバー ボタン (「Googleで検索」「設定」「ジャンル表示」)。
- * 実物は 86x20 / 30x20 / 76x18 と小さいが、帯の内容 (22px) に合わせ、左右 9px の余白を
- * 持つ平らなボタンにする (98.css の min-width 75px と浮き出しは打ち消す)。
- * ホバー (浮き出し) と押下 (沈み) は、ライブラリのツールバー ボタンと同じ見た目を
- * `src/styles/app.css` が付ける (境界線を透明で持たせておくのが前提)。
+ * 実物は 86x20 / 30x20 / 76x18 と小さいが、帯の content (22px) に合わせ、左右 9px の余白を
+ * 持つボタンにする。**境界線と浮き出しは 98.css の既定をそのまま使う** (平らにする上書きは
+ * しない。実物のこれらのボタンは押しボタンの形をしている)。
  */
 export const TOOLBAR_TEXT_BUTTON_STYLE: CSSProperties = {
   flex: '0 0 auto',
@@ -95,6 +94,4 @@ export const TOOLBAR_TEXT_BUTTON_STYLE: CSSProperties = {
   padding: `0 ${TOOLBAR_TEXT_BUTTON_PADDING_X}px`,
   whiteSpace: 'nowrap',
   boxSizing: 'border-box',
-  border: '1px solid transparent',
-  boxShadow: 'none',
 };

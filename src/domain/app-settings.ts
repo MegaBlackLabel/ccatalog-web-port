@@ -52,24 +52,25 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   linkWindowIconify: false,
 };
 
+/** Google 検索の対象項目 (ダイアログ 212 のコンボ 1693 / 1694)。 */
+export type GoogleSearchField = 'circleName' | 'circleKana' | 'penName' | 'bookName';
+
 /** Google 検索の条件設定 (ダイアログ 212)。 */
 export type GoogleSearchSettings = {
   /** both = 両方を含む / either = いずれかを含む / custom = カスタム設定。 */
   mode: 'both' | 'either' | 'custom';
-  /** custom のときの検索対象項目。 */
-  fields: {
-    circleName: boolean;
-    penName: boolean;
-    bookName: boolean;
-    circleKana: boolean;
-  };
-  /** custom のときの条件 (true = AND)。 */
+  /** custom の項目 1 (1693)。 */
+  field1: GoogleSearchField;
+  /** custom の項目 2 (1694)。 */
+  field2: GoogleSearchField;
+  /** custom の条件 (1695)。true = 両方を含む (AND)。 */
   andMode: boolean;
 };
 
 export const DEFAULT_GOOGLE_SEARCH_SETTINGS: GoogleSearchSettings = {
   mode: 'both',
-  fields: { circleName: true, penName: true, bookName: false, circleKana: false },
+  field1: 'circleName',
+  field2: 'penName',
   andMode: true,
 };
 
@@ -150,6 +151,10 @@ export type ListColumnKey =
   | 'kana'
   | 'pen'
   | 'book'
+  | 'description'
+  | 'memo'
+  | 'updateInfo'
+  | 'updateStatus'
   | 'url'
   | 'mail';
 
@@ -168,6 +173,10 @@ export const LIST_COLUMN_LABELS: Record<ListColumnKey, string> = {
   kana: '読みがな',
   pen: '執筆者',
   book: '発行誌',
+  description: '補足',
+  memo: 'メモ',
+  updateInfo: '更新情報',
+  updateStatus: '更新状態',
   url: 'URL',
   mail: 'Mail',
 };
@@ -185,6 +194,10 @@ export const LIST_COLUMN_ORDER: readonly ListColumnKey[] = [
   'kana',
   'pen',
   'book',
+  'description',
+  'memo',
+  'updateInfo',
+  'updateStatus',
   'url',
   'mail',
 ];
@@ -201,9 +214,20 @@ export type ListDisplaySettings = {
 };
 
 export const DEFAULT_LIST_DISPLAY_SETTINGS: ListDisplaySettings = {
-  // 実物のダイアログ 210 の並び (参加日 / スペース / ジャンル / サークルカット / サークル名 /
-  // 読みがな / 執筆者 / 発行誌 / URL / Mail)。URL / Mail は既定では非表示。
-  checklist: ['day', 'space', 'genre', 'cut', 'name', 'kana', 'pen', 'book'],
+  // チェックリストの既定は実物のウィンドウ (1WINDOW/3CHECK.HTM) の見出しと同じ並び:
+  // スペース / サークルカット / サークル名 / 発行誌 / 補足 / メモ / 更新情報 / 更新状態。
+  // 先頭の「印刷順」(色 + 連番) は固定列なので、ここには含めない。
+  checklist: [
+    'space',
+    'cut',
+    'name',
+    'book',
+    'description',
+    'memo',
+    'updateInfo',
+    'updateStatus',
+  ],
+  // サークル一覧は実物のダイアログ 210 の並び。
   list: ['day', 'space', 'genre', 'cut', 'name', 'kana', 'pen', 'book'],
 };
 

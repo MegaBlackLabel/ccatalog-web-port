@@ -57,6 +57,10 @@ export function ExportResultDialog({
   return (
     <Window
       data-testid="export-result-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="エクスポート結果表示"
       modal
       onClose={onClose}

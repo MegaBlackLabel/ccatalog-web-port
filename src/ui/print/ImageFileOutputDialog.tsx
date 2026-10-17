@@ -291,10 +291,12 @@ export function ImageFileOutputDialog({
   };
 
   return (
-    // 実物と同じくサイズ変更不可。ライブラリの Window にリサイズ可否の props は無いので、
-    // app.css でリサイズ ハンドルを消している。
     <Window
       data-testid="image-output-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="印刷データの画像ファイル出力"
       modal
       onClose={onClose}

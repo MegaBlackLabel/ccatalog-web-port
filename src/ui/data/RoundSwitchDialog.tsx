@@ -100,6 +100,10 @@ export function RoundSwitchDialog({
   return (
     <Window
       data-testid="round-switch-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="コミックマーケット回数切り替え"
       modal
       onClose={onClose}

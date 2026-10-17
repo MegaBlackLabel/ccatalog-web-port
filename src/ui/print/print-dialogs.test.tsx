@@ -1,8 +1,5 @@
-// app.css を直接読むために node の型を参照する (tsconfig の types は vitest と jest-dom だけ)。
-/// <reference types="node" />
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PRINT_CUT_SETTINGS, PrintCutDialog, PrintCutPage } from './PrintCutDialog';
 import type { PrintCutDialogProps, PrintCutSettings } from './PrintCutDialog';
@@ -12,10 +9,6 @@ import { DEFAULT_PRINT_LIST_SETTINGS, PrintListDialog, PrintListPage } from './P
 import type { PrintListDialogProps, PrintListSettings, PrintTarget } from './PrintListDialog';
 import { DEFAULT_PRINT_MAP_SETTINGS, PrintMapDialog, PrintMapPage } from './PrintMapDialog';
 import type { PrintMapDialogProps, PrintMapSettings } from './PrintMapDialog';
-
-// 印刷ダイアログのリサイズ ハンドルを消す規則は app.css 側にある (ライブラリが常に描くため)。
-// テストでは CSS が読み込まれない (vite.config.ts の test.css = false) ので、ファイルを直接見る。
-const appCss = readFileSync('src/styles/app.css', 'utf8');
 
 /** 印刷範囲のフィクスチャ。既定から外した値にして、変更時に他の項目が保たれるかを見る。 */
 const TARGET: PrintTarget = { days: [2], halls: ['東1'], colors: [3] };
@@ -1254,8 +1247,20 @@ describe('PrintDialog', () => {
     // 右下のサイズ グリップは statusBar を渡さないので描かれない。
     expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
     expect(dialog.querySelector('.status-bar')).toBeNull();
-    // リサイズ ハンドルはライブラリが描くので、app.css でこのダイアログだけ消す。
-    expect(appCss).toContain("[data-testid='print-dialog'] [class*='resizeHandle']");
+    // リサイズ ハンドルは resizable={false} で描かれない (実物もサイズ変更不可)。
+    expect(dialog.querySelector('[class*="resizeHandle"]')).toBeNull();
+  });
+
+  // 実物のダイアログはタイトルバーに × だけを出し、端のドラッグでもサイズを変えられない
+  // (Window の minimizable / maximizable / resizable)。
+  it('タイトルバーのボタンは × だけで、リサイズ ハンドルを持たない', () => {
+    const { dialog } = renderPrint();
+
+    const labels = Array.from(dialog.querySelectorAll('.title-bar-controls button')).map((button) =>
+      button.getAttribute('aria-label'),
+    );
+    expect(labels).toEqual(['Close']);
+    expect(dialog.querySelectorAll('[class*="resize"]')).toHaveLength(0);
   });
 
   it('印刷形式は 4 つのラジオで、実物のラベルを出す (アイコンは付けない)', () => {

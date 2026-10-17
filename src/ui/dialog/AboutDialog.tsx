@@ -61,6 +61,10 @@ export function AboutDialog({
   return (
     <Window
       data-testid="about-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="バージョン情報"
       modal
       onClose={onClose}

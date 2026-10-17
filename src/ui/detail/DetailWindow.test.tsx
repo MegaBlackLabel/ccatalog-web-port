@@ -96,6 +96,7 @@ function renderDetail(overrides: Partial<DetailWindowProps> = {}) {
     onMemoChange: vi.fn(),
     onSetColor: vi.fn(),
     onGoogleSearch: vi.fn(),
+    onGoogleSearchSettings: vi.fn(),
     onClose: vi.fn(),
     ...overrides,
   };
@@ -584,12 +585,14 @@ describe('DetailWindow', () => {
       // 帯 25px (明 1px + silver 1px + 暗 1px) の内側に収まるライブラリと同じ 22px のボタン。
       expect(Number.parseFloat(button.style.height)).toBe(22);
       expect(button.style.padding).toBe('0px 9px');
-      expect(button.style.paddingLeft).toBe('9px');
-      expect(button.style.paddingRight).toBe('9px');
       expect(button.style.minHeight).toBe('22px');
       // 幅は文字に合わせて伸ばす (98.css の min-width 75px は打ち消す)。
       expect(button.style.width).toBe('');
       expect(button.style.minWidth).toBe('0px');
+      // 実物と同じ「ボタン」の形。境界線と浮き出しは 98.css の既定をそのまま使う
+      // (平らにする上書きをしない)。
+      expect(button.style.border).toBe('');
+      expect(button.style.boxShadow).toBe('');
     }
 
     // 実測の色ボタンは 12x9 の色矩形 + 1px の黒枠 (14x11) だったが、ユーザー指示で
@@ -660,13 +663,14 @@ describe('DetailWindow', () => {
     expect(props.onSetColor).toHaveBeenCalledWith(4);
   });
 
-  it('「Googleで検索」は onGoogleSearch を呼び、「設定」は押せない', async () => {
+  it('「Googleで検索」は onGoogleSearch を、「設定」は onGoogleSearchSettings を呼ぶ', async () => {
     const { user, props, detail } = renderDetail();
     const toolbar = within(detail).getByTestId('detail-toolbar');
 
     const settings = within(toolbar).getByRole('button', { name: '設定' });
-    expect(settings).toBeDisabled();
+    expect(settings).toBeEnabled();
     await user.click(settings);
+    expect(props.onGoogleSearchSettings).toHaveBeenCalledTimes(1);
     expect(props.onGoogleSearch).not.toHaveBeenCalled();
     expect(props.onSetColor).not.toHaveBeenCalled();
 
@@ -699,7 +703,8 @@ describe('DetailWindow', () => {
 
     const toolbar = within(detail).getByTestId('detail-toolbar');
     expect(within(toolbar).getByTestId('detail-google-search')).toBeDisabled();
-    expect(within(toolbar).getByTestId('detail-settings')).toBeDisabled();
+    // 「設定」は検索条件の設定なので、サークル未選択でも押せる。
+    expect(within(toolbar).getByTestId('detail-settings')).toBeEnabled();
     const color1 = within(toolbar).getByTestId('detail-color-1');
     for (const color of CHECK_COLOR_IDS) {
       expect(within(toolbar).getByRole('button', { name: `色${color}` })).toBeDisabled();

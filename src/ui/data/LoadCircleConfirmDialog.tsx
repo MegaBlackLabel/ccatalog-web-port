@@ -105,6 +105,10 @@ export function LoadCircleConfirmDialog({
   return (
     <Window
       data-testid="load-circle-confirm-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="読み込みサークル確認"
       modal
       onClose={onClose}

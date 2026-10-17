@@ -1,8 +1,5 @@
-// app.css を直接読むために node の型を参照する (tsconfig の types は vitest と jest-dom だけ)。
-/// <reference types="node" />
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { ExportResultDialogProps } from '../dialog/ExportResultDialog';
 import { ExportResultDialog } from '../dialog/ExportResultDialog';
@@ -12,10 +9,6 @@ import { PrintPreviewWindow } from './PrintPreviewWindow';
 import type { PrintPreviewWindowProps } from './PrintPreviewWindow';
 import { PrintProgressDialog } from './PrintProgressDialog';
 import type { PrintProgressDialogProps } from './PrintProgressDialog';
-
-// リサイズ ハンドルを消す規則は app.css 側にある (ライブラリが常に描くため)。
-// テストでは CSS が読み込まれない (vite.config.ts の test.css = false) ので、ファイルを直接見る。
-const appCss = readFileSync('src/styles/app.css', 'utf8');
 
 function renderPreview(overrides: Partial<PrintPreviewWindowProps> = {}) {
   const props: PrintPreviewWindowProps = {
@@ -321,7 +314,8 @@ describe('ImageFileOutputDialog (ダイアログ 197)', () => {
     expect(content.style.overflow).toBe('hidden');
     expect(body.style.overflow).toBe('hidden');
     expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
-    expect(appCss).toContain("[data-testid='image-output-dialog'] [class*='resizeHandle']");
+    // リサイズ ハンドルは resizable={false} で描かれない (実物もサイズ変更不可)。
+    expect(dialog.querySelector('[class*="resizeHandle"]')).toBeNull();
   });
 
   it('元のコントロール ID を保つ (197 のコントロール)', () => {

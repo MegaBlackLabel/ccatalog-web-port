@@ -287,6 +287,30 @@ export function ListWindow({
       width: 130,
       render: (_value, row) => genreNames[row.genreId] ?? String(row.genreId),
     },
+    description: {
+      key: 'description',
+      header: '補足',
+      width: 200,
+      render: (_value, row) => (row.description === '' ? '—' : row.description),
+    },
+    memo: {
+      key: 'memo',
+      header: 'メモ',
+      width: 200,
+      render: (_value, row) => (row.memo === '' ? '—' : row.memo),
+    },
+    updateInfo: {
+      key: 'updateData',
+      header: '更新情報',
+      width: 200,
+      render: (_value, row) => (row.updateData === '' ? '—' : row.updateData),
+    },
+    updateStatus: {
+      key: 'updateFlag',
+      header: '更新状態',
+      width: 120,
+      render: (_value, row) => (row.updateFlag === 0 ? '—' : '更新あり'),
+    },
     url: {
       key: 'url',
       header: 'URL',

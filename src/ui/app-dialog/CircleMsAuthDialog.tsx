@@ -88,6 +88,10 @@ export function CircleMsAuthDialog({
   return (
     <Window
       data-testid="circlems-auth-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="Circle.ms 認証ダイアログ"
       modal
       onClose={onClose}

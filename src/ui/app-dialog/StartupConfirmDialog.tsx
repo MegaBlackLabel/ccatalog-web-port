@@ -63,6 +63,10 @@ export function StartupConfirmDialog({
   return (
     <Window
       data-testid="startup-confirm-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="起動確認"
       // Escape とタイトルバーの × は「終了」として扱う。
       onClose={onExit}

@@ -86,6 +86,10 @@ export function MemoMergeDialog({
   return (
     <Window
       data-testid="memo-merge-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="サークルメモの統合"
       modal
       onClose={onClose}

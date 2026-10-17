@@ -104,6 +104,10 @@ export function ListDialog({
   return (
     <Window
       data-testid="list-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title={title}
       modal
       onClose={onClose}

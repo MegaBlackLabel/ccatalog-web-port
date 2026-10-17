@@ -117,6 +117,10 @@ export function CircleDataDialog({
   return (
     <Window
       data-testid="circle-data-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="サークルデータの追加インストールと削除"
       modal
       onClose={onClose}

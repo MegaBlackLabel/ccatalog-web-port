@@ -1,7 +1,7 @@
 {
   "name": "ccatalog-web-port",
   "private": true,
-  "version": "0.4.8",
+  "version": "0.4.9",
   "type": "module",
   "description": "コミケットカタログブラウザ（ccatalog.exe / C96）の Web 移植 — Web で同じ操作が動くかの検証用",
   "scripts": {
@@ -15,7 +15,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@megablacklabel/react98retro": "0.4.8",
+    "@megablacklabel/react98retro": "0.4.9",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

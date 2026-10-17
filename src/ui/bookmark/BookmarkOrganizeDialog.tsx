@@ -171,6 +171,10 @@ export function BookmarkOrganizeDialog({
   return (
     <Window
       data-testid="bookmark-organize-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="ブックマークの整理"
       modal
       onClose={onClose}

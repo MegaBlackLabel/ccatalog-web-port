@@ -131,6 +131,10 @@ export function HelpDialog({
   return (
     <Window
       data-testid="help-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title={MODE_TITLE[mode]}
       onClose={onClose}
       width={width}

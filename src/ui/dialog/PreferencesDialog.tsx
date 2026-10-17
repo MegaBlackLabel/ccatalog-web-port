@@ -701,9 +701,13 @@ export function PreferencesDialog({
   };
 
   return (
-    // 実物と同じくサイズ変更不可 (app.css でリサイズ ハンドルを消す)。本文のスクロールも出さない。
+    // 実物と同じくサイズ変更不可 (Window の resizable={false})。本文のスクロールも出さない。
     <Window
       data-testid="preferences-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="動作設定"
       modal
       onClose={onClose}

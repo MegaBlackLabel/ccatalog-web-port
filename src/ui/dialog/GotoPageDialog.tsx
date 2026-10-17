@@ -74,6 +74,10 @@ export function GotoPageDialog({
   return (
     <Window
       data-testid="goto-page-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="移動先ページの指定"
       modal
       onClose={onClose}

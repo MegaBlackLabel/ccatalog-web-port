@@ -73,10 +73,41 @@ body,
 }
 
 /* 行の高さは罫線を含めて 17px (98.css の tbody は 14px)。box-sizing は
-   app.css の `*` で border-box なので、罫線を引いても 17px のまま収まる。 */
+   app.css の `*` で border-box なので、罫線を引いても 17px のまま収まる。
+   ただしサークルカットの行は画像 (64x91) に合わせて伸ばすので、最小高さにする。 */
 [data-testid='checklist-window'] > .window-body table > tbody > tr > * {
-  height: 17px;
-  line-height: 16px;
+  min-height: 17px;
+  height: auto;
+  /* 実物のチェックリストは、セルの文字が上下中央で左寄せ (色の見本も左端に寄る)。 */
+  vertical-align: middle;
+  text-align: left;
+}
+
+/* タブパネル (.window) の内側の余白と枠を消して、表をタブ枠いっぱいに出す
+   (実物はタブのすぐ下から表が始まり、左端にも余白が無い)。 */
+.checklist-page {
+  padding: 0 !important;
+  border-width: 0 !important;
+  overflow: hidden;
+}
+
+/* 表を包む凹み枠 (sunken-panel) の内側の余白も消す。 */
+.checklist-page .sunken-panel {
+  padding: 0 !important;
+}
+
+/* タブパネルの内側の本文 (window-body) は左右 8px のマージンを持つ。
+   実物の表はタブ枠いっぱいなので、ここも消す。 */
+.checklist-page .window-body {
+  margin: 0 !important;
+}
+
+/* 見出し行はスクロールしても固定する (実物はヘッダが動かない)。
+   98.css も thead に sticky を当てるが、table 自身が overflow を持つため効かない。 */
+[data-testid='checklist-window'] > .window-body table > thead > tr > * {
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 /* 表の右端はウィンドウの枠 (sunken-panel) が受け持つので二重線にしない。 */
@@ -144,19 +175,9 @@ body,
   height: 15px;
 }
 
-/* ツールバーのボタンのホバー (浮き出し) と押下 (沈み)。サークルカット ウィンドウの
-   ボタンはライブラリの Toolbar (Toolbar.module.css の .toolbarButton) が持つ見た目だが、
-   他の 4 ウィンドウ (チェックリスト / サークル一覧 / サークル詳細 / 会場マップ) のボタンは
-   アプリ側が inline style で平らな見た目を持っているため、ホバーが付いていなかった。
-   ライブラリと同じ色を !important で当てる (inline style より優先させるため)。
-   押下状態 (aria-pressed のロック ボタン) は inline の沈みを優先して触らない。 */
-[data-testid$='-toolbar'] button:hover:not(:disabled):not([aria-pressed='true']) {
-  border-color: #ffffff #808080 #808080 #ffffff !important;
-}
-
-[data-testid$='-toolbar'] button:active:not(:disabled):not([aria-pressed='true']) {
-  border-color: #808080 #ffffff #ffffff #808080 !important;
-}
+/* ツールバーの文字ボタンは 98.css の押しボタンの見た目をそのまま使う (境界線と浮き出しを
+   打ち消さない)。以前は平らに見せるため、ここでホバー / 押下の境界線を !important で
+   差し替えていた。 */
 
 /* ツールバーの並べ替え中: 掴んでいるグループを薄く、挿入位置に縦の目印を出す。
    目印は外側の影で描く (内側の影は中身の下に描かれて左端が隠れるため)。 */
@@ -176,16 +197,4 @@ body,
 [data-testid='image-output-dialog'] .field-row + .field-row,
 [data-testid='preferences-dialog'] .field-row + .field-row {
   margin-top: 0;
-}
-
-/* 印刷ダイアログ (1538) は実物と同じくサイズ変更不可にする。ライブラリの Window は
-   8 方向のリサイズ ハンドルを常に描く (リサイズ可否の props が無い) ので、このダイアログ
-   では描かせない (ハンドルが無ければ端のドラッグも効かない)。用紙サイズ・余白 (203) /
-   画像ファイル出力 (197) / 動作設定 (150・191・210・149) / チェック色の編集 (149 単体) も同じ。 */
-[data-testid='print-dialog'] [class*='resizeHandle'],
-[data-testid='page-setup-dialog'] [class*='resizeHandle'],
-[data-testid='image-output-dialog'] [class*='resizeHandle'],
-[data-testid='preferences-dialog'] [class*='resizeHandle'],
-[data-testid='check-color-dialog'] [class*='resizeHandle'] {
-  display: none;
 }

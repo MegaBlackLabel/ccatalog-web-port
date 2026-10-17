@@ -86,6 +86,10 @@ export function DatabaseMergeDialog({
   return (
     <Window
       data-testid="database-merge-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="古いデータベースの統合"
       modal
       onClose={onClose}

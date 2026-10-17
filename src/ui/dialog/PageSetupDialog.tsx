@@ -279,6 +279,10 @@ export function PageSetupDialog({
   return (
     <Window
       data-testid="page-setup-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="用紙サイズ・余白の設定"
       modal
       onClose={onClose}

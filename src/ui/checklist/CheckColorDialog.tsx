@@ -57,7 +57,7 @@ const BUTTON_ROW_STYLE: CSSProperties = {
  *
  * ウィンドウの幅は動作設定 (510px) に揃える。高さは実物のチェック色ページ
  * (250 DLU × 1.85 = 462px) にタブ行とボタン行 (動作設定と同じ 113px) を足した 575 相当の
- * 577。サイズ変更不可 (app.css でリサイズ ハンドルを消す)、本文のスクロールも出さない。
+ * 577。サイズ変更不可 (Window の resizable={false})、本文のスクロールも出さない。
  */
 export function CheckColorDialog({
   checkColors,
@@ -84,6 +84,10 @@ export function CheckColorDialog({
   return (
     <Window
       data-testid="check-color-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="チェック色の編集"
       modal
       onClose={onClose}

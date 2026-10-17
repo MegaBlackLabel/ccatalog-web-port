@@ -404,10 +404,12 @@ export function PrintDialog({
   };
 
   return (
-    // 実物と同じくサイズ変更不可。ライブラリの Window にリサイズ可否の props は無いので、
-    // app.css でリサイズ ハンドルとサイズ グリップ (statusBar 無しなら描かれない) を消している。
     <Window
       data-testid="print-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="印刷"
       modal
       onClose={onClose}

@@ -1,14 +1,8 @@
-// app.css を直接読むために node の型を参照する (tsconfig の types は vitest と jest-dom だけ)。
-/// <reference types="node" />
 import { render, screen, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CHECK_COLOR_SETTINGS } from '../../domain/app-settings';
 import { CheckColorDialog } from './CheckColorDialog';
-
-// リサイズ ハンドルを消す規則は app.css 側にある (ライブラリが常に描くため)。
-const appCss = readFileSync('src/styles/app.css', 'utf8');
 import type { CheckColorDialogProps } from './CheckColorDialog';
 
 function renderDialog(overrides: Partial<CheckColorDialogProps> = {}) {
@@ -51,10 +45,11 @@ describe('CheckColorDialog (実物の「チェック色の編集」プロパテ�
     // 幅は動作設定 (プロパティシート) と同じ 510、高さは実物のページ + タブ行 + ボタン行。
     expect(root.style.width).toBe('510px');
     expect(root.style.height).toBe('577px');
-    // 本文はスクロールさせず、リサイズ ハンドルも出さない。
+    // 本文はスクロールさせず、リサイズ ハンドルも出さない
+    // (Window の resizable={false} が 8 方向のハンドルを描かせない)。
     expect((dialog.querySelector('.window-body') as HTMLElement).style.overflow).toBe('hidden');
     expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
-    expect(appCss).toContain("[data-testid='check-color-dialog'] [class*='resizeHandle']");
+    expect(dialog.querySelector('[class*="resizeHandle"]')).toBeNull();
 
     // 編集するチェック色 / 色の編集 / チェック色名の編集 (元のコントロール ID)。
     for (const controlId of [1702, 1665, 1636, 1038, 1711]) {

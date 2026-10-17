@@ -50,6 +50,8 @@ export type DetailWindowProps = {
   /** 色 1〜9 のボタン。押した色でチェックリストに登録する。 */
   onSetColor?: (color: CheckColor) => void;
   onGoogleSearch: () => void;
+  /** ツールバーの「設定」(元実装の Button 32836)。Google 検索条件の設定 (ダイアログ 212)。 */
+  onGoogleSearchSettings: () => void;
   onClose: () => void;
   /** タイトルバーの最小化 (アイコン化)。動作設定 1714「個別窓のアイコン化を連動する」。 */
   onMinimize?: () => void;
@@ -418,6 +420,7 @@ export function DetailWindow({
   onSetColor,
   onMemoChange,
   onGoogleSearch,
+  onGoogleSearchSettings,
   onClose,
   onMinimize,
   checkColors,
@@ -497,12 +500,13 @@ export function DetailWindow({
             >
               Googleで検索
             </Button>
-            {/* 実測の Button 32836。Web 版に対応するコマンドが無いので無効にしてある。 */}
+            {/* 実測の Button 32836。Google 検索の条件設定 (ダイアログ 212) を開く。 */}
             <Button
               type="button"
               data-testid="detail-settings"
-              disabled
+              data-ctrl-id={32836}
               style={TOOLBAR_TEXT_BUTTON_STYLE}
+              onClick={onGoogleSearchSettings}
               title="設定"
             >
               設定

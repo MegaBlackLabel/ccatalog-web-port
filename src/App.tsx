@@ -1572,6 +1572,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
             state.selectedId !== null && dispatch({ type: 'memo/set', id: state.selectedId, memo })
           }
           onGoogleSearch={() => handleCommand(MENU_COMMANDS.googleSearch)}
+          onGoogleSearchSettings={() => setDialog('googleSearch')}
           onClose={() => setDetailOpen(false)}
           onMinimize={() => iconify('detail')}
           checkColors={displayCheckColors}

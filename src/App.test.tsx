@@ -875,8 +875,9 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
 
     await chooseMenu(user, '検索(S)', /^Google検索の条件設定/);
     const dialog = await screen.findByTestId('google-search-dialog');
-    await user.click(within(dialog).getByLabelText('『サークル名』と『執筆者名』のいずれかを含む'));
-    await user.click(within(dialog).getByTestId('google-search-close'));
+    await user.click(within(dialog).getByLabelText('「サークル名」と「執筆者名」のいずれかを含む（OR条件）'));
+    // 選択は OK で確定する (キャンセルでは捨てる)。
+    await user.click(within(dialog).getByTestId('google-search-ok'));
 
     await chooseMenu(user, '検索(S)', /^サークルをGoogleで検索/);
 
@@ -1285,14 +1286,14 @@ describe('App — 動作設定 (プロパティシート)', () => {
   it('リスト表示で列を外すとチェックリストの列が消える', async () => {
     const { user } = await renderApp();
     const checklist = await screen.findByTestId('checklist-window');
-    expect(within(checklist).getByRole('columnheader', { name: 'ジャンル' })).toBeInTheDocument();
+    expect(within(checklist).getByRole('columnheader', { name: 'メモ' })).toBeInTheDocument();
 
     const dialog = await openPage(user, 'リスト表示');
-    await user.click(within(dialog).getByLabelText('ジャンル'));
+    await user.click(within(dialog).getByLabelText('メモ'));
     await user.click(within(dialog).getByTestId('preferences-ok'));
 
     await waitFor(() =>
-      expect(within(checklist).queryByRole('columnheader', { name: 'ジャンル' })).not.toBeInTheDocument(),
+      expect(within(checklist).queryByRole('columnheader', { name: 'メモ' })).not.toBeInTheDocument(),
     );
     // サークル名は外せない (5LIST.HTM)。
     expect(within(checklist).getByRole('columnheader', { name: 'サークル名' })).toBeInTheDocument();

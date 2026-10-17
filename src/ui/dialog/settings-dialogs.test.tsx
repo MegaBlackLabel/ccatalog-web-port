@@ -1,13 +1,8 @@
-// app.css を直接読むために node の型を参照する (tsconfig の types は vitest と jest-dom だけ)。
-/// <reference types="node" />
 import { useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
-// リサイズ ハンドルを消す規則は app.css 側にある (ライブラリが常に描くため)。
-const appCss = readFileSync('src/styles/app.css', 'utf8');
 import {
   DEFAULT_APP_SETTINGS,
   DEFAULT_CHECK_COLOR_SETTINGS,
@@ -18,7 +13,7 @@ import {
   LIST_COLUMN_LABELS,
 } from '../../domain/app-settings';
 import type { ListColumnKey } from '../../domain/app-settings';
-import type { GoogleSearchSettings, PageSetup } from '../../domain/app-settings';
+import type { PageSetup } from '../../domain/app-settings';
 import { GoogleSearchDialog } from './GoogleSearchDialog';
 import type { GoogleSearchDialogProps } from './GoogleSearchDialog';
 import { ListDialog } from './ListDialog';
@@ -365,7 +360,7 @@ describe('PreferencesDialog', () => {
     expect(browseRow.style.justifyContent).toBe('flex-end');
   });
 
-  it('リスト表示の項目は実物の 10 項目 (この順) で、ボタンと注記も実物どおり', async () => {
+  it('リスト表示の項目は実物の 14 項目 (この順) で、ボタンと注記も実物どおり', async () => {
     const { user, dialog } = renderPreferences();
     const tab = within(dialog).getByRole('tab', { name: 'リスト表示' });
     await user.click(tab.querySelector('a') ?? tab);
@@ -373,24 +368,36 @@ describe('PreferencesDialog', () => {
     const rows = [...byControlId(dialog, 1694).querySelectorAll('[data-testid^="column-row-"]')].map(
       (row) => (row.getAttribute('data-testid') ?? '').replace('column-row-', ''),
     );
-    // 実物どおり 10 項目 (表示中が先、非表示の URL / Mail は末尾)。
-    expect(rows).toHaveLength(10);
+    // 表示中の項目が先、非表示の項目が末尾 (並びはダイアログ 210 の項目順)。
+    expect(rows).toHaveLength(14);
     expect(rows.slice(0, 8)).toEqual([
-      'day',
       'space',
-      'genre',
       'cut',
       'name',
-      'kana',
-      'pen',
       'book',
+      'description',
+      'memo',
+      'updateInfo',
+      'updateStatus',
     ]);
-    expect(rows.slice(8)).toEqual(['url', 'mail']);
-    // 実物に無い項目 (補足 / メモ) は出さない。
-    expect(within(dialog).queryByLabelText('補足')).toBeNull();
-    expect(within(dialog).queryByLabelText('メモ')).toBeNull();
+    expect(rows.slice(8)).toEqual(['day', 'genre', 'kana', 'pen', 'url', 'mail']);
     // ラベルは実物の項目名。
-    for (const label of ['参加日', 'スペース', 'ジャンル', 'サークルカット', 'サークル名', '読みがな', '執筆者', '発行誌', 'URL', 'Mail']) {
+    for (const label of [
+      '参加日',
+      'スペース',
+      'ジャンル',
+      'サークルカット',
+      'サークル名',
+      '読みがな',
+      '執筆者',
+      '発行誌',
+      '補足',
+      'メモ',
+      '更新情報',
+      '更新状態',
+      'URL',
+      'Mail',
+    ]) {
       expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
     }
     // ボタンは実物の文言。
@@ -463,14 +470,14 @@ describe('PreferencesDialog', () => {
       within(dialog).getAllByRole('button', { name: '後へ移動(B)' })[0] as HTMLButtonElement;
 
     // 実物のリストは最初の項目が選ばれている (先頭なので「前へ移動」だけ無効)。
-    expect(within(dialog).getAllByTestId('column-row-day')[0]).toHaveStyle({
+    expect(within(dialog).getAllByTestId('column-row-space')[0]).toHaveStyle({
       background: '#000080',
     });
     expect(prev()).toBeDisabled();
     expect(next()).toBeEnabled();
 
     // 途中の項目を選ぶと両方押せる。
-    await user.click(within(dialog).getAllByTestId('column-row-genre')[0]);
+    await user.click(within(dialog).getAllByTestId('column-row-cut')[0]);
     expect(prev()).toBeEnabled();
     expect(next()).toBeEnabled();
 
@@ -537,7 +544,7 @@ describe('PreferencesDialog', () => {
     expect(content.style.overflow).toBe('hidden');
     expect(body.style.overflow).toBe('hidden');
     expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
-    expect(appCss).toContain("[data-testid='preferences-dialog'] [class*='resizeHandle']");
+    expect(dialog.querySelector('[class*="resizeHandle"]')).toBeNull();
     const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
     expect(root.style.width).toBe('510px');
     expect(root.style.height).toBe('670px');
@@ -545,7 +552,7 @@ describe('PreferencesDialog', () => {
 });
 
 describe('GoogleSearchDialog', () => {
-  it('既定では「両方を含む」が選択されている', () => {
+  it('実物と同じ体裁 (ラジオ / OK・キャンセル) で、既定は「両方を含む」', () => {
     const { dialog } = renderGoogleSearch();
 
     expect(screen.getByText('Google検索設定')).toBeInTheDocument();
@@ -553,64 +560,105 @@ describe('GoogleSearchDialog', () => {
     expect(byControlId(dialog, 1690)).not.toBeChecked();
     expect(byControlId(dialog, 1691)).toBeChecked();
     expect(byControlId(dialog, 1692)).not.toBeChecked();
-    expect(within(dialog).getByLabelText('カスタム設定')).toBe(byControlId(dialog, 1692));
+    expect(within(dialog).getByTestId('google-search-ok')).toHaveTextContent('OK');
+    expect(within(dialog).getByTestId('google-search-cancel')).toHaveTextContent('キャンセル');
   });
 
-  it('カスタム設定以外では項目と条件のコントロールを出さない', () => {
+  it('ラベルが折り返さないギリギリの幅にする (自然幅 351 + 余白 42)', () => {
+    const { dialog } = renderGoogleSearch();
+    const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
+
+    // 一番長いラベルの自然幅は実測 351px。groupbox の内側余白 10px x2 と
+    // ウィンドウ枠・本文余白 22px を足した 393px まで詰める (これ以上狭めると折り返す)。
+    expect(Number.parseFloat(root.style.width)).toBeGreaterThanOrEqual(390);
+    expect(Number.parseFloat(root.style.width)).toBeLessThanOrEqual(400);
+  });
+
+  it('カスタムのコンボは常に出て、カスタム以外では非活性', () => {
     const { dialog } = renderGoogleSearch();
 
-    expect(within(dialog).queryByLabelText('発行誌名')).toBeNull();
-    expect(within(dialog).queryByLabelText('両方を含む')).toBeNull();
+    // カスタム以外でも 3 つを出したまま、押せない状態にする。
+    expect(within(dialog).getByTestId('google-search-field-1')).toBeDisabled();
+    expect(within(dialog).getByTestId('google-search-field-2')).toBeDisabled();
+    expect(within(dialog).getByTestId('google-search-condition')).toBeDisabled();
   });
 
-  it('カスタム設定を選ぶと mode の patch で onChange を呼ぶ', async () => {
-    const { user, props, dialog } = renderGoogleSearch();
+  it('カスタムを選ぶとコンボが活性になる (元のコントロール ID)', async () => {
+    const { user, dialog } = renderGoogleSearch();
 
     await user.click(byControlId(dialog, 1692));
 
-    expect(props.onChange).toHaveBeenCalledTimes(1);
-    expect(props.onChange).toHaveBeenCalledWith({ mode: 'custom' });
+    const field1 = within(dialog).getByTestId('google-search-field-1');
+    expect(field1).toBeEnabled();
+    expect(field1).toHaveValue('circleName');
+    expect([...field1.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
+      'サークル名',
+      '読みがな',
+      '執筆者名',
+      '発行誌名',
+    ]);
+    expect(within(dialog).getByTestId('google-search-field-2')).toHaveValue('penName');
+    expect(within(dialog).getByTestId('google-search-condition')).toHaveValue('and');
+    // 元のコントロール ID (1693 / 1694 / 1695) を保つ。
+    for (const controlId of [1693, 1694, 1695]) {
+      expect(dialog.querySelector(`[data-ctrl-id="${controlId}"]`), String(controlId)).not.toBeNull();
+    }
   });
 
-  it('カスタム設定の項目チェックは fields の patch で onChange を呼ぶ', async () => {
-    const settings: GoogleSearchSettings = {
-      mode: 'custom',
-      fields: { circleName: true, penName: true, bookName: false, circleKana: false },
-      andMode: true,
-    };
-    const { user, props, dialog } = renderGoogleSearch({ settings });
+  it('ボタンは右配置にする (実物は右端に寄る)', () => {
+    const { dialog } = renderGoogleSearch();
 
-    expect(within(dialog).getByLabelText('サークル名')).toBeChecked();
-    expect(within(dialog).getByLabelText('発行誌名')).not.toBeChecked();
-
-    await user.click(within(dialog).getByLabelText('発行誌名'));
-
-    expect(props.onChange).toHaveBeenCalledTimes(1);
-    expect(props.onChange).toHaveBeenCalledWith({
-      fields: { circleName: true, penName: true, bookName: true, circleKana: false },
-    });
+    const ok = within(dialog).getByTestId('google-search-ok');
+    const row = ok.parentElement as HTMLElement;
+    expect(row.style.justifyContent).toBe('flex-end');
+    // OK とキャンセルが同じ行に並ぶ。
+    expect(within(row).getByTestId('google-search-cancel')).toBeInTheDocument();
   });
 
-  it('カスタム設定の条件ラジオは andMode の patch で onChange を呼ぶ', async () => {
-    const settings: GoogleSearchSettings = {
-      mode: 'custom',
-      fields: { circleName: true, penName: true, bookName: false, circleKana: false },
-      andMode: true,
-    };
-    const { user, props, dialog } = renderGoogleSearch({ settings });
+  it('カスタムでも下部の OK / キャンセルが見える高さを確保する', async () => {
+    const { user, dialog } = renderGoogleSearch();
+    const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
 
-    await user.click(within(dialog).getByLabelText('いずれかを含む'));
-
-    expect(props.onChange).toHaveBeenCalledTimes(1);
-    expect(props.onChange).toHaveBeenCalledWith({ andMode: false });
+    // コンボ 3 つぶんの高さを最初から確保しておく (カスタムにしてもボタンが押せる)。
+    expect(Number.parseFloat(root.style.height)).toBeGreaterThanOrEqual(240);
+    expect(within(dialog).getByTestId('google-search-ok')).toBeInTheDocument();
+    await user.click(byControlId(dialog, 1692));
+    expect(within(dialog).getByTestId('google-search-ok')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('google-search-cancel')).toBeInTheDocument();
   });
 
-  it('閉じるは onClose を呼ぶ', async () => {
+  it('OK は編集をまとめて親に出して閉じる', async () => {
     const { user, props, dialog } = renderGoogleSearch();
 
-    await user.click(within(dialog).getByTestId('google-search-close'));
+    await user.click(byControlId(dialog, 1692));
+    await user.selectOptions(within(dialog).getByTestId('google-search-field-1'), 'bookName');
+    await user.selectOptions(within(dialog).getByTestId('google-search-condition'), 'or');
+    await user.click(within(dialog).getByTestId('google-search-ok'));
 
+    expect(props.onChange).toHaveBeenCalledWith({
+      mode: 'custom',
+      field1: 'bookName',
+      field2: 'penName',
+      andMode: false,
+    });
     expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('キャンセルは編集を捨てて閉じる', async () => {
+    const { user, props, dialog } = renderGoogleSearch();
+
+    await user.click(byControlId(dialog, 1692));
+    await user.click(within(dialog).getByTestId('google-search-cancel'));
+
+    expect(props.onChange).not.toHaveBeenCalled();
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('OK まで親に出さない (その場では設定が変わらない)', async () => {
+    const { user, props, dialog } = renderGoogleSearch();
+
+    await user.click(byControlId(dialog, 1690));
+
     expect(props.onChange).not.toHaveBeenCalled();
   });
 });
