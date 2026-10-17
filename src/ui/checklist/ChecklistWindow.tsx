@@ -14,6 +14,7 @@ import type { TabItem, TableColumn } from '@megablacklabel/react98retro';
 import type { CheckColor, ChecklistEntry, ChecklistSortColumn } from '../../app/catalog-state';
 import { checkColorHex, checkColorPalette, checkSwatchIcon } from '../check-colors';
 import { DEFAULT_LIST_DISPLAY_SETTINGS, type ListColumnKey } from '../../domain/app-settings';
+import { assetUrl } from '../asset-url';
 // 実物のツールバー アイコン (PE の RT_BITMAP を SVG 化したもの) をそのまま使う。
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
 import {
@@ -87,13 +88,29 @@ export type ChecklistListRow = {
   pen: string;
   /** 発行誌 (DB の bookName)。 */
   book: string;
-  /** 補足 (DB の description)。 */
-  description: string;
-  /** サークルメモ (DB の memo)。 */
-  memo: string;
   space: string;
   day: string;
   genre: string;
+  /** 補足 (DB の description)。 */
+  description: string;
+  /** メモ (アプリ側の memos)。 */
+  memo: string;
+  /** 更新情報 (DB の updateData)。 */
+  updateInfo: string;
+  /** 更新状態 (DB の updateFlag)。 */
+  updateStatus: string;
+  /** URL (DB の url)。 */
+  url: string;
+  /** Mail (DB の mailAddr)。 */
+  mail: string;
+  /** Twitter (DB の twitter)。 */
+  twitter: string;
+  /** Pixiv (DB の pixiv)。 */
+  pixiv: string;
+  /** WebCatalog (DB の circlems)。 */
+  webCatalog: string;
+  /** Circle.ms (DB の rss)。 */
+  circleMs: string;
 };
 
 /** チェック色の見本色 (0 は標準色 = 緑)。定義は 5 ウィンドウ共通 (ui/check-colors.ts)。 */
@@ -118,11 +135,53 @@ const CHECKLIST_COLUMN_DEFS: Record<Exclude<ListColumnKey, 'color'>, TableColumn
   kana: { key: 'kana', header: '読み', width: 110 },
   pen: { key: 'pen', header: '執筆者', width: 120 },
   book: { key: 'book', header: '発行誌', width: 160 },
-  description: { key: 'description', header: '補足', width: 120, render: (value) => renderText(value) },
-  memo: { key: 'memo', header: 'メモ', width: 120, render: (value) => renderText(value) },
-  space: { key: 'space', header: '位置', width: 60 },
-  day: { key: 'day', header: '日付', width: 70 },
+  space: { key: 'space', header: 'スペース', width: 90 },
+  day: { key: 'day', header: '参加日', width: 70 },
   genre: { key: 'genre', header: 'ジャンル', width: 110 },
+  description: { key: 'description', header: '補足', width: 200, render: (value) => renderText(value) },
+  memo: { key: 'memo', header: 'メモ', width: 200, render: (value) => renderText(value) },
+  updateInfo: { key: 'updateInfo', header: '更新情報', width: 200, render: (value) => renderText(value) },
+  updateStatus: { key: 'updateStatus', header: '更新状態', width: 120, render: (value) => renderText(value) },
+  twitter: { key: 'twitter', header: 'Twitter', width: 160, render: (value) => renderText(value) },
+  pixiv: { key: 'pixiv', header: 'Pixiv', width: 160, render: (value) => renderText(value) },
+  // 実物の DB は webcatalog.circle.ms の URL を circlems 列に、portal.circle.ms の
+  // URL を rss 列に入れている (一覧ウィンドウと同じ扱い)。
+  webCatalog: { key: 'webCatalog', header: 'WebCatalog', width: 160, render: (value) => renderText(value) },
+  circleMs: { key: 'circleMs', header: 'Circle.ms', width: 160, render: (value) => renderText(value) },
+  url: { key: 'url', header: 'URL', width: 160, render: (value) => renderText(value) },
+  mail: { key: 'mail', header: 'Mail', width: 160, render: (value) => renderText(value) },
+  cut: {
+    key: 'circleId',
+    header: 'サークルカット',
+    // カット 111px + セルの左右の余白 (6px x 2) + 左の罫線 1px = 124px。
+    // これがカットのぴったりの幅 (実物もカットが列幅の 93% を占める)。
+    width: 124,
+    render: (_value, row) => (
+      <img
+        data-testid="checklist-cut"
+        src={assetUrl(`/cuts/${row.circleId}.png`)}
+        alt=""
+        draggable={false}
+        style={CUT_STYLE}
+      />
+    ),
+  },
+};
+
+/**
+ * カット列の画像。実物 (revealed-3-チェックリスト.png) はカット 79x116 で、
+ * 列幅 (約 85px) の 93% を占める。このアプリの見出しは実物の 1.40 倍の幅なので
+ * 同じ比で 111x162 にする (DB 上の表示サイズ 178x253 と同じ縦横比 0.70)。
+ * 他のセルは左寄せだが、カットだけは列の左右中央に置く。
+ */
+const CUT_STYLE: CSSProperties = {
+  display: 'block',
+  width: 111,
+  height: 162,
+  maxWidth: '100%',
+  margin: '0 auto',
+  objectFit: 'contain',
+  imageRendering: 'pixelated',
 };
 
 /**
@@ -138,10 +197,10 @@ function checklistColumns(
   visible: readonly ListColumnKey[],
 ): TableColumn<ChecklistListRow>[] {
   return [
-    { key: 'no', header: 'No.', width: 34 },
+    // 実物の先頭は「印刷順」列で、色の見本を左に、連番を右に置く (色列の見出しは無い)。
     {
       key: 'color',
-      header: '色',
+      header: '',
       width: 34,
       render: (_value, row) => (
         <span
@@ -150,6 +209,7 @@ function checklistColumns(
         />
       ),
     },
+    { key: 'no', header: '印刷順', width: 60 },
     ...visible
       .filter((key): key is Exclude<ListColumnKey, 'color'> => key !== 'color')
       .map((key) => CHECKLIST_COLUMN_DEFS[key]),
@@ -234,11 +294,22 @@ export function ChecklistWindow({
     kana: circle.circleKana,
     pen: circle.penName,
     book: circle.bookName,
-    description: circle.description,
-    memo: circle.memo,
     space: `${circle.spaceNo}${circle.spaceNoSub === 1 ? 'b' : 'a'}`,
     day: circle.day === 0 ? '抽選漏れ' : `${circle.day}日目`,
     genre: genreName,
+    description: circle.description,
+    memo: circle.memo,
+    // 実物の「更新情報」は DB の updateData、「更新状態」は更新フラグ。
+    updateInfo: circle.updateData,
+    updateStatus: circle.updateFlag === 0 ? '' : '更新あり',
+    url: circle.url,
+    mail: circle.mailAddr,
+    twitter: circle.twitter,
+    pixiv: circle.pixiv,
+    // 実物の DB は webcatalog.circle.ms の URL を circlems 列に、portal.circle.ms の
+    // URL を rss 列に入れている (ComiketCircle.tsv の実データで確認)。
+    webCatalog: circle.circlems,
+    circleMs: circle.rss,
   }));
 
   const hasSelection = selectedIds.length > 0;
@@ -377,6 +448,7 @@ export function ChecklistWindow({
         // ライブラリ 0.2.4 の fill でタブパネルが親の高さに追従する
         // (以前は height - CHROME_HEIGHT で当て推量していた)。
         fill
+        panelClassName="checklist-page"
         style={TABS_STYLE}
       />
     </Window>

@@ -28,15 +28,21 @@ import {
 import type { CheckColor } from '../../app/catalog-state';
 import { CHECK_COLOR_IDS, checkColorPalette, checkSwatchIcon } from '../check-colors';
 import { DEFAULT_LIST_DISPLAY_SETTINGS, type ListColumnKey } from '../../domain/app-settings';
-import { KANA_ROWS, OTHER_KANA_ROW, kanaRowOf } from '../../domain/kana';
-import type { Circle, Genre } from '../../domain/types';
+import type { BlockInfo, Circle, DateInfo, Genre } from '../../domain/types';
+import { WEEKDAY_NAMES } from '../../domain/weekday';
 import { assetUrl } from '../asset-url';
 
-/** リスト中のカット (32868)。行の高さに収まる小さな画像。 */
+/**
+ * リスト中のカット (32868)。実物の一覧 (1WINDOW/6LIST.HTM) のカットは 49x66 で、
+ * 行の高さ 73 のほとんどを占める。このアプリの見出しは実物の 1.4 倍の幅なので
+ * 同じ比で 69x92 にする (DB 上の表示サイズ 178x253 と同じ縦横比 0.70)。
+ */
 const LIST_CUT_STYLE: CSSProperties = {
   display: 'block',
-  height: 28,
-  width: 'auto',
+  width: 69,
+  height: 92,
+  objectFit: 'contain',
+  imageRendering: 'pixelated',
 };
 
 /** 表示モードボックス (1WINDOW/6LIST.HTM) の選択肢。 */
@@ -46,6 +52,13 @@ export type ListWindowProps = {
   /** カタログの全サークル。日付／ブロック／インデックスの候補と表示内容をここから作る。 */
   circles: readonly Circle[];
   genres: readonly Genre[];
+  /**
+   * ブロック (ComiketBlock)。ツールバーのブロックの選択肢は実物と同じ「あ」「い」… の
+   * 名前で出す (サークルからは ID しか分からないので、名前はここから引く)。
+   */
+  blocks?: readonly BlockInfo[];
+  /** 日程 (ComiketDate)。ツールバーの日付の選択肢は実物と同じ曜日 (「金曜日」) で出す。 */
+  dates?: readonly DateInfo[];
   /** 直前の検索結果。null は未検索。 */
   results: readonly Circle[] | null;
   selectedId: number | null;
@@ -144,6 +157,8 @@ const QUICK_SEARCH_INPUT_STYLE: CSSProperties = { width: 160 };
 export function ListWindow({
   circles,
   genres,
+  blocks: blocksInfo = [],
+  dates = [],
   results,
   selectedId,
   status,
@@ -176,7 +191,6 @@ export function ListWindow({
   );
   const [day, setDay] = useState<number | null>(null);
   const [blockId, setBlockId] = useState<number | null>(null);
-  const [kanaRow, setKanaRow] = useState<string | null>(null);
   const [keywords, setKeywords] = useState('');
   /** リストビューの選択 (チェック色変更・チェック解除はこの ID 全部に効く)。 */
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -209,46 +223,48 @@ export function ListWindow({
 
 
   // 日付・ブロック・インデックスの選択肢はデータから作る (ハードコードしない)。
+  // 日付は実物と同じ曜日 (「金曜日」)、ブロックは実物と同じ名前 (「あ」「い」…) で出す。
   const days = new Set<number>();
   for (const circle of circles) {
     if (circle.day > 0) days.add(circle.day);
   }
   const dayOptions: DropdownOption[] = [...days]
     .sort((a, b) => a - b)
-    .map((value) => ({ value: String(value), label: `${value}日目` }));
+    .map((value) => {
+      const date = dates.find((entry) => entry.id === value);
+      return { value: String(value), label: WEEKDAY_NAMES[date?.weekday ?? 0] || `${value}日目` };
+    });
 
   // ブロックは日付ごとに違う (元実装の「金曜日 / 西2壁」も 1 日目のブロック) ので、
-  // 選んだ日付のサークルから作る。読みのインデックスも同じ理由で日付ごとに作る。
+  // 選んだ日付のサークルから「配置のあるブロック」を求める (初期値に使う)。
   const activeDay = day ?? Number(dayOptions[0]?.value ?? 0);
   const dayCircles = circles.filter((circle) => circle.day === activeDay);
 
   const blocks = new Set<number>();
-  const kanaRowLabels = new Set<string>();
   for (const circle of dayCircles) {
     if (circle.blockId > 0) blocks.add(circle.blockId);
-    kanaRowLabels.add(kanaRowOf(circle.circleKana));
   }
-  const blockOptions: DropdownOption[] = [...blocks].sort((a, b) => a - b).map((value) => ({
-    // ブロックの表示はサークル詳細と同じく blockId 1 が A。
-    value: String(value),
-    label: String.fromCharCode(0x40 + value),
-  }));
-  const kanaRowOptions: DropdownOption[] = [...KANA_ROWS.map((row) => row.label), OTHER_KANA_ROW]
-    .filter((label) => kanaRowLabels.has(label))
-    .map((label) => ({ value: label, label }));
+  const blocksWithCircles = [...blocks].sort((a, b) => a - b);
 
-  // 未選択・選択肢から外れた値なら先頭の候補にする (コンボの表示と中身をずらさない)。
+  // ブロック／インデックスの選択肢は実物と同じくカタログの全ブロック
+  // (「あ」〜「れ」→「Ａ」〜「Ｒ」→「ア」〜「リ」の 100 個)。その日に配置が無い
+  // ブロックも選べる (選ぶと 0 件になる) のが実物の挙動。
+  const blockOptions: DropdownOption[] = [...blocksInfo]
+    .sort((a, b) => a.id - b.id)
+    .map((block) => ({ value: String(block.id), label: block.name }));
+
+  // 未選択・選択肢から外れた値なら、その日に配置のある先頭のブロックにする
+  // (0 件から始めない)。それも無ければ先頭の候補。
+  const fallback = blocksWithCircles[0] ?? blockOptions[0]?.value;
   const activeBlockId = blockOptions.some((option) => option.value === String(blockId))
     ? (blockId as number)
-    : Number(blockOptions[0]?.value ?? 0);
-  const activeKanaRow = kanaRowOptions.some((option) => option.value === kanaRow)
-    ? (kanaRow as string)
-    : kanaRowOptions[0]?.value ?? '';
+    : Number(fallback ?? 0);
 
   let shown: readonly Circle[];
   switch (mode) {
     case 'dateIndex':
-      shown = dayCircles.filter((circle) => kanaRowOf(circle.circleKana) === activeKanaRow);
+      // インデックスもブロックそのもの (ブロック名 = 読みの 1 文字目) で絞る。
+      shown = dayCircles.filter((circle) => circle.blockId === activeBlockId);
       break;
     case 'lotteryMiss':
       shown = circles.filter((circle) => circle.day === 0);
@@ -263,47 +279,123 @@ export function ListWindow({
   const genreNames: Record<number, string> = {};
   for (const genre of genres) genreNames[genre.id] = genre.name;
 
-  /** 列 1 本の定義。「リスト表示」の設定 (動作設定 210) の並びで表示する列だけを並べる。 */
+  /**
+   * 列 1 本の定義。「リスト表示」の設定 (動作設定 210) の並びで表示する列だけを並べる。
+   * 見出しの文言と列幅は実物のウィンドウ (1WINDOW/6LIST.HTM) の実測に合わせる
+   * (実物の列幅はこのアプリの見出しの文字幅が実物の 1.4 倍なので、同じ比で広げている)。
+   */
   const columnDefs: Record<Exclude<ListColumnKey, 'color'>, TableColumn<ListRow>> = {
-    name: { key: 'circleName', header: 'サークル名', width: 200 },
-    kana: { key: 'circleKana', header: '読み', width: 110 },
-    pen: { key: 'penName', header: '執筆者', width: 140 },
-    book: { key: 'bookName', header: '発行誌', width: 150 },
-    description: {
-      key: 'description',
-      header: '補足',
-      width: 140,
-      render: (_value, row) => (row.description === '' ? '—' : row.description),
-    },
-    memo: { key: 'memo', header: 'メモ', width: 140, render: (_value, row) => (row.memo === '' ? '—' : row.memo) },
+    name: { key: 'circleName', header: 'サークル名', width: 171 },
+    kana: { key: 'circleKana', header: '読みがな', width: 112 },
+    pen: { key: 'penName', header: '執筆者', width: 112 },
+    book: { key: 'bookName', header: '発行誌', width: 112 },
     space: {
       key: 'spaceNo',
-      header: '位置',
-      width: 70,
+      header: 'スペース',
+      width: 90,
       render: (_value, row) => `${row.spaceNo}${row.spaceNoSub === 1 ? 'b' : 'a'}`,
     },
     day: {
       key: 'day',
-      header: '日付',
-      width: 80,
+      header: '参加日',
+      width: 90,
       render: (_value, row) => (row.day === 0 ? '抽選漏れ' : `${row.day}日目`),
     },
     genre: {
       key: 'genreId',
       header: 'ジャンル',
-      width: 130,
+      width: 134,
       render: (_value, row) => genreNames[row.genreId] ?? String(row.genreId),
+    },
+    url: {
+      key: 'url',
+      header: 'URL',
+      width: 168,
+      render: (_value, row) => (row.url === '' ? '—' : row.url),
+    },
+    mail: {
+      key: 'mailAddr',
+      header: 'Mail',
+      width: 112,
+      render: (_value, row) => (row.mailAddr === '' ? '—' : row.mailAddr),
+    },
+    twitter: {
+      key: 'twitter',
+      header: 'Twitter',
+      width: 112,
+      render: (_value, row) => (row.twitter === '' ? '—' : row.twitter),
+    },
+    pixiv: {
+      key: 'pixiv',
+      header: 'Pixiv',
+      width: 112,
+      render: (_value, row) => (row.pixiv === '' ? '—' : row.pixiv),
+    },
+    description: {
+      key: 'description',
+      header: '補足',
+      width: 280,
+      render: (_value, row) => (row.description === '' ? '—' : row.description),
+    },
+    memo: {
+      key: 'memo',
+      header: 'メモ',
+      width: 280,
+      render: (_value, row) => (row.memo === '' ? '—' : row.memo),
+    },
+    updateInfo: {
+      key: 'updateData',
+      header: '更新情報',
+      width: 280,
+      render: (_value, row) => (row.updateData === '' ? '—' : row.updateData),
+    },
+    // 実物の DB は webcatalog.circle.ms の URL を circlems 列に、portal.circle.ms の
+    // URL を rss 列に入れている (ComiketCircle.tsv の実データで確認)。一覧の見出しは
+    // その URL の種類に合わせて WebCatalog / Circle.ms になる。
+    webCatalog: {
+      key: 'circlems',
+      header: 'WebCatalog',
+      width: 112,
+      render: (_value, row) => (row.circlems === '' ? '—' : row.circlems),
+    },
+    updateStatus: {
+      key: 'updateFlag',
+      header: '更新状態',
+      width: 90,
+      render: (_value, row) => (row.updateFlag === 0 ? '—' : '更新あり'),
+    },
+    circleMs: {
+      key: 'rss',
+      header: 'Circle.ms',
+      width: 112,
+      render: (_value, row) => (row.rss === '' ? '—' : row.rss),
+    },
+    cut: {
+      key: 'circleId',
+      header: 'サークルカット',
+      // カット 69px + セルの左右の余白 (6px x 2) + 左の罫線 1px = 82px。
+      width: 82,
+      render: (_value, row) => (
+        <img
+          data-testid="list-cut"
+          src={assetUrl(`/cuts/${row.circleId}.png`)}
+          alt=""
+          draggable={false}
+          style={LIST_CUT_STYLE}
+        />
+      ),
     },
   };
 
   const columns: readonly TableColumn<ListRow>[] = [
-    // 表示 > リスト中のカット表示 (32868) を入れると、行の先頭にカット画像の列が出る。
-    ...(showCuts
+    // 表示 > リスト中のカット表示 (32868) を入れると、行の先頭にカット画像の列が出る
+    // (「リスト表示」でサークルカットの列を出しているときは二重にしない)。
+    ...(showCuts && !visibleColumns.includes('cut')
       ? [
           {
             key: 'circleId' as const,
-            header: 'カット',
-            width: 60,
+            header: 'サークルカット',
+            width: 82,
             render: (_value: string | number, row: ListRow) => (
               <img
                 data-testid="list-cut"
@@ -368,33 +460,30 @@ export function ListWindow({
           options={dayOptions}
           value={String(activeDay)}
           disabled={!dayEnabled}
-          onChange={(event) => setDay(Number(event.target.value))}
+          onChange={(event) => {
+            setDay(Number(event.target.value));
+            // ブロックは日付ごとに違うので、日付を変えたら選び直す (実物も同じ)。
+            setBlockId(null);
+          }}
         />
       ),
     },
     {
       id: 'blockIndex',
-      node:
-        mode === 'dateIndex' ? (
-          <Dropdown
-            aria-label="インデックス"
-            data-ctrl-id={131}
-            data-testid="list-index"
-            options={kanaRowOptions}
-            value={activeKanaRow}
-            onChange={(event) => setKanaRow(event.target.value)}
-          />
-        ) : (
-          <Dropdown
-            aria-label="ブロック"
-            data-ctrl-id={131}
-            data-testid="list-block"
-            options={blockOptions}
-            value={String(activeBlockId)}
-            disabled={mode !== 'dateBlock'}
-            onChange={(event) => setBlockId(Number(event.target.value))}
-          />
-        ),
+      // 「日付／ブロック指定」と「日付／インデックス」の 3 つ目は、実物と同じ
+      // あいうえお順のインデックス (「あ」〜「れ」→「Ａ」〜「Ｒ」→「ア」〜「リ」)
+      // を出す。実物のブロック名がそのままインデックスなので選択肢は同じ。
+      node: (
+        <Dropdown
+          aria-label={mode === 'dateIndex' ? 'インデックス' : 'ブロック'}
+          data-ctrl-id={131}
+          data-testid={mode === 'dateIndex' ? 'list-index' : 'list-block'}
+          options={blockOptions}
+          value={String(activeBlockId)}
+          disabled={mode !== 'dateBlock' && mode !== 'dateIndex'}
+          onChange={(event) => setBlockId(Number(event.target.value))}
+        />
+      ),
     },
     {
       id: 'search',

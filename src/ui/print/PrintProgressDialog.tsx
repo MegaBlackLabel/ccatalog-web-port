@@ -53,6 +53,10 @@ export function PrintProgressDialog({
   return (
     <Window
       data-testid="print-progress-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title={title}
       modal
       // 印刷中は Escape とタイトルバーの × もキャンセルとして扱う (モーダルな進捗表示)。

@@ -210,4 +210,16 @@ describe('AboutDialog', () => {
 
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
+
+  // 実物のダイアログはタイトルバーに × だけを出し、端のドラッグでもサイズを変えられない
+  // (Window の minimizable / maximizable / resizable)。
+  it('タイトルバーのボタンは × だけで、リサイズ ハンドルを持たない', () => {
+    const { dialog } = renderAbout();
+
+    const labels = Array.from(dialog.querySelectorAll('.title-bar-controls button')).map((button) =>
+      button.getAttribute('aria-label'),
+    );
+    expect(labels).toEqual(['Close']);
+    expect(dialog.querySelectorAll('[class*="resize"]')).toHaveLength(0);
+  });
 });

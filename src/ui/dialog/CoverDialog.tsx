@@ -70,6 +70,10 @@ export function CoverDialog({
   return (
     <Window
       data-testid="cover-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="表紙"
       onClose={onClose}
       width={width}

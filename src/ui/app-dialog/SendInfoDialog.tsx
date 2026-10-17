@@ -66,6 +66,10 @@ export function SendInfoDialog({
   return (
     <Window
       data-testid="send-info-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="情報送信の確認"
       // Escape とタイトルバーの × は「いいえ」(送信しない) として扱う。
       onClose={() => onAnswer(false)}

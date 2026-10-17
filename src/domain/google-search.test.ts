@@ -41,20 +41,22 @@ describe('buildGoogleQuery (ダイアログ 212 の条件設定)', () => {
     expect(buildGoogleQuery(CIRCLE, settings)).toBe('きんやま書房 OR アオイ そら');
   });
 
-  it('カスタム設定 (発行誌名だけ / 両方を含む) は選んだ項目だけを使う', () => {
+  it('カスタム設定 (発行誌名とサークル名 / 両方を含む) は選んだ項目だけを使う', () => {
     const settings: GoogleSearchSettings = {
       mode: 'custom',
       andMode: true,
-      fields: { circleName: false, penName: false, bookName: true, circleKana: false },
+      field1: 'bookName',
+      field2: 'circleName',
     };
-    expect(buildGoogleQuery(CIRCLE, settings)).toBe('同人誌の作り方');
+    expect(buildGoogleQuery(CIRCLE, settings)).toBe('同人誌の作り方 きんやま書房');
   });
 
   it('カスタム設定で「いずれかを含む」を選ぶと選んだ項目を OR でつなぐ', () => {
     const settings: GoogleSearchSettings = {
       mode: 'custom',
       andMode: false,
-      fields: { circleName: true, penName: false, bookName: true, circleKana: false },
+      field1: 'circleName',
+      field2: 'bookName',
     };
     expect(buildGoogleQuery(CIRCLE, settings)).toBe('きんやま書房 OR 同人誌の作り方');
   });
@@ -63,7 +65,8 @@ describe('buildGoogleQuery (ダイアログ 212 の条件設定)', () => {
     const settings: GoogleSearchSettings = {
       mode: 'custom',
       andMode: true,
-      fields: { circleName: true, penName: true, bookName: false, circleKana: false },
+      field1: 'circleName',
+      field2: 'penName',
     };
     expect(buildGoogleQuery({ ...CIRCLE, penName: '  ' }, settings)).toBe('きんやま書房');
   });

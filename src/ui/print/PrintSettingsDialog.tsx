@@ -136,6 +136,10 @@ export function PrintSettingsDialog({
   return (
     <Window
       data-testid="print-settings-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="印刷詳細設定"
       modal
       onClose={onClose}

@@ -38,12 +38,18 @@ describe('CheckColorDialog (実物の「チェック色の編集」プロパテ�
     expect(within(dialog).getByTestId('check-color-apply')).toBeDisabled();
   });
 
-  it('元実装のコントロールを持つ (431 x 577)', () => {
+  it('動作設定と同じ 510 x 577 で、コントロールも元実装どおり', () => {
     const { dialog } = renderDialog();
 
     const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
-    expect(root.style.width).toBe('431px');
+    // 幅は動作設定 (プロパティシート) と同じ 510、高さは実物のページ + タブ行 + ボタン行。
+    expect(root.style.width).toBe('510px');
     expect(root.style.height).toBe('577px');
+    // 本文はスクロールさせず、リサイズ ハンドルも出さない
+    // (Window の resizable={false} が 8 方向のハンドルを描かせない)。
+    expect((dialog.querySelector('.window-body') as HTMLElement).style.overflow).toBe('hidden');
+    expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
+    expect(dialog.querySelector('[class*="resizeHandle"]')).toBeNull();
 
     // 編集するチェック色 / 色の編集 / チェック色名の編集 (元のコントロール ID)。
     for (const controlId of [1702, 1665, 1636, 1038, 1711]) {
@@ -65,7 +71,7 @@ describe('CheckColorDialog (実物の「チェック色の編集」プロパテ�
     expect(within(dialog).getByText('チェック色名の編集(E)')).toBeInTheDocument();
     expect(within(dialog).getByText('名称(N) :')).toBeInTheDocument();
     expect(within(dialog).getByTestId('preferences-color-reset')).toHaveTextContent(
-      '標準の設定に戻す(R)',
+      'デフォルト色に戻す(R)',
     );
     expect(within(dialog).getByTestId('preferences-color-mac-reset')).toHaveTextContent(
       'Macデフォルト色に戻す(M)',
@@ -75,12 +81,15 @@ describe('CheckColorDialog (実物の「チェック色の編集」プロパテ�
   it('「色1」〜「色9」の見出しは、色のボタンと同じ位置から始まる', () => {
     const { dialog } = renderDialog();
 
-    // 見出し行と表示色の行は、どちらも「表示色 :」と同じ幅の先頭スペーサを持つ
+    // 見出し行と表示色 / 印刷色の行は、どちらも「表示色 :」と同じ幅の先頭スペーサを持つ
     // (実物は色のボタンの真上に見出しが並ぶ)。
     const labels = within(dialog).getByTestId('check-color-labels');
     const displayRow = within(dialog).getByTestId('check-color-display-row');
-    expect((labels.firstElementChild as HTMLElement).style.width).toBe('56px');
-    expect((displayRow.firstElementChild as HTMLElement).style.width).toBe('56px');
+    const printRow = within(dialog).getByTestId('check-color-print-row');
+    const labelWidth = (labels.firstElementChild as HTMLElement).style.width;
+    expect(labelWidth.length).toBeGreaterThan(0);
+    expect((displayRow.firstElementChild as HTMLElement).style.width).toBe(labelWidth);
+    expect((printRow.firstElementChild as HTMLElement).style.width).toBe(labelWidth);
   });
 
   it('下部ボタンは右寄せ (実物は右端揃え)', () => {

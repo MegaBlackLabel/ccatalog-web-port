@@ -272,13 +272,14 @@ describe('catalogReducer — 動作設定 (ダイアログ 150 / 212 / 203)', ()
     });
     expect(next.googleSearch.mode).toBe('custom');
     expect(next.googleSearch.andMode).toBe(false);
-    expect(next.googleSearch.fields).toEqual(DEFAULT_GOOGLE_SEARCH_SETTINGS.fields);
+    expect(next.googleSearch.field1).toBe(DEFAULT_GOOGLE_SEARCH_SETTINGS.field1);
+    expect(next.googleSearch.field2).toBe(DEFAULT_GOOGLE_SEARCH_SETTINGS.field2);
   });
 
   it('用紙サイズ・余白を変更できる', () => {
-    const next = catalogReducer(loaded, { type: 'pageSetup/set', patch: { marginX: 20 } });
-    expect(next.pageSetup.marginX).toBe(20);
-    expect(next.pageSetup.dpi).toBe(DEFAULT_PAGE_SETUP.dpi);
+    const next = catalogReducer(loaded, { type: 'pageSetup/set', patch: { marginLeft: 20 } });
+    expect(next.pageSetup.marginLeft).toBe(20);
+    expect(next.pageSetup.paper).toBe(DEFAULT_PAGE_SETUP.paper);
   });
 });
 

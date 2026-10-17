@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   DEFAULT_APP_SETTINGS,
   DEFAULT_CHECK_COLOR_SETTINGS,
@@ -12,7 +13,7 @@ import {
   LIST_COLUMN_LABELS,
 } from '../../domain/app-settings';
 import type { ListColumnKey } from '../../domain/app-settings';
-import type { GoogleSearchSettings, PageSetup } from '../../domain/app-settings';
+import type { PageSetup } from '../../domain/app-settings';
 import { GoogleSearchDialog } from './GoogleSearchDialog';
 import type { GoogleSearchDialogProps } from './GoogleSearchDialog';
 import { ListDialog } from './ListDialog';
@@ -61,13 +62,14 @@ function renderGoogleSearch(overrides: Partial<GoogleSearchDialogProps> = {}) {
 }
 
 const PAGE_SETUP: PageSetup = {
-  dpi: 600,
-  paperWidth: 210,
-  paperHeight: 297,
-  marginX: 10,
-  marginY: 12,
-  offsetX: -2,
-  offsetY: 3,
+  paper: 'B5',
+  paperWidth: 182,
+  paperHeight: 257,
+  marginLeft: 10,
+  marginRight: 15,
+  marginTop: 12,
+  marginBottom: 8,
+  keepAspect: false,
 };
 
 function renderPageSetup(overrides: Partial<PageSetupDialogProps> = {}) {
@@ -137,13 +139,13 @@ describe('PreferencesDialog — 列の表示項目の並べ替え (1694〜1699)'
 
     // 2 番目の行をクリックして選ぶ (チェックの状態は変えない)。
     await user.click(within(box).getByTestId(`column-row-${before[1]}`));
-    expect(within(dialog).getAllByRole('button', { name: '前へ移動' })[0]).toBeEnabled();
+    expect(within(dialog).getAllByRole('button', { name: '前へ移動(F)' })[0]).toBeEnabled();
 
-    await user.click(within(dialog).getAllByRole('button', { name: '前へ移動' })[0]);
+    await user.click(within(dialog).getAllByRole('button', { name: '前へ移動(F)' })[0]);
     expect(order().slice(0, 2)).toEqual([before[1], before[0]]);
 
     // 元に戻せる (後へ移動)。
-    await user.click(within(dialog).getAllByRole('button', { name: '後へ移動' })[0]);
+    await user.click(within(dialog).getAllByRole('button', { name: '後へ移動(B)' })[0]);
     expect(order().slice(0, 2)).toEqual([before[0], before[1]]);
   });
 
@@ -167,9 +169,18 @@ describe('PreferencesDialog — 列の表示項目の並べ替え (1694〜1699)'
 
     await user.click(within(box).getByLabelText(LIST_COLUMN_LABELS[key]));
 
-    // チェックを外した列は一覧の後ろへ回る。
-    expect(rows()[0].getAttribute('data-testid')).not.toBe(`column-row-${key}`);
-    expect(rows()[rows().length - 1].getAttribute('data-testid')).toBe(`column-row-${key}`);
+    // チェックを外した列は一覧の後ろ (表示中の列の後ろ) へ回る。
+    const after = rows();
+    const movedIndex = after.findIndex(
+      (row) => row.getAttribute('data-testid') === `column-row-${key}`,
+    );
+    expect(movedIndex).toBeGreaterThanOrEqual(0);
+    const states = after.map(
+      (row) => (within(row as HTMLElement).getByRole('checkbox') as HTMLInputElement).checked,
+    );
+    expect(states[movedIndex]).toBe(false);
+    // チェックの付いた行が先、外れた行が後ろに並ぶ。
+    expect(states).toEqual([...states].sort((left, right) => Number(right) - Number(left)));
   });
 });
 
@@ -191,16 +202,16 @@ describe('PreferencesDialog', () => {
     }
 
     // 元実装のラベルをそのまま使っている (抜粋)。
-    expect(within(dialog).getByLabelText('シングルクリックでチェックする')).toBe(
+    expect(within(dialog).getByLabelText('シングルクリックでチェックする (S)')).toBe(
       byControlId(dialog, 1026),
     );
-    expect(within(dialog).getByLabelText('読み込み時にサークルメモを上書きする')).toBe(
+    expect(within(dialog).getByLabelText('読み込み時にサークルメモを上書きする(O)')).toBe(
       byControlId(dialog, 1712),
     );
-    expect(within(dialog).getByLabelText('個別窓のアイコン化を連動する')).toBe(
+    expect(within(dialog).getByLabelText('個別窓のアイコン化を連動する(I)')).toBe(
       byControlId(dialog, 1714),
     );
-    expect(within(dialog).getByRole('button', { name: '設定を初期化' })).toBe(
+    expect(within(dialog).getByRole('button', { name: '設定を初期化(D)' })).toBe(
       byControlId(dialog, 1720),
     );
   });
@@ -292,10 +303,271 @@ describe('PreferencesDialog', () => {
     expect(props.onClose).toHaveBeenCalledTimes(1);
     expect(props.onReset).not.toHaveBeenCalled();
   });
+
+  it('動作オプションのラベルは実物のニーモニック付き (実測のグループ寸法)', async () => {
+    const { user, dialog } = renderPreferences();
+
+    // 実測: 425x92 / 133 / 117 / 107 (4,7,225,50 などの DLU を x1.75 / y1.85 で換算)。
+    const groupOf = (legend: string) =>
+      [...dialog.querySelectorAll('fieldset')].find(
+        (field) => field.querySelector(':scope > legend')?.textContent === legend,
+      ) as HTMLElement;
+    for (const [legend, height] of [
+      ['画面の掴みスクロールの方式', '92px'],
+      ['カーソル移動', '133px'],
+      ['データ読み込み', '117px'],
+      ['その他', '107px'],
+    ] as const) {
+      expect(groupOf(legend).style.height).toBe(height);
+    }
+
+    for (const label of [
+      'Adobe方式(A) （スペースキーを押しながらマウスドラッグ）',
+      'IE方式(E) （ホイールクリックでスクロールロック）',
+      'マウスドラッグのみで掴みスクロール(R)',
+      'リターンキーでチェック時、カーソルを自動で次のサークルに移動 (N)',
+      'テンキーでチェック時、カーソルを自動で次のサークルに移動 (M)',
+      'ページ変更時に常に左上のサークルカットにカーソルを合わせる (U)',
+      '選択カーソルをマウスカーソルに追従する (T)',
+      '選択サークルのブロックが変わった際にサークル一覧の表示も追従する (L)',
+      '起動時に前回使用したチェックリストを自動的に読み込む (P)',
+      '過去のチェックリスト読み込み時、サークル名チェックを厳密に行う (C)',
+      '個別窓のアイコン化を連動する(I)',
+      'シングルクリックでチェックする (S)',
+      '起動時に表紙画像を表示する (B)',
+    ]) {
+      expect(within(dialog).getByText(label)).toBeInTheDocument();
+    }
+
+    // パス設定はニーモニック付きで、参照(C)... は入力欄の下 (実物どおり)。
+    const tabs = within(dialog);
+    await user.click(tabs.getByRole('tab', { name: 'パス設定' }).querySelector('a') ?? tabs.getByRole('tab', { name: 'パス設定' }));
+    expect(within(dialog).getByText('自動検索する(F)')).toBeInTheDocument();
+    expect(within(dialog).getByText('指定場所から読み込む(R)')).toBeInTheDocument();
+    expect(within(dialog).getByText('場所(D) :')).toBeInTheDocument();
+    expect(within(dialog).getByText('ブラウザを指定(B)')).toBeInTheDocument();
+    expect(within(dialog).getAllByRole('button', { name: '参照(C)...' })).toHaveLength(2);
+    // Web 版だけの注記は実物に無いので出さない。
+    expect(within(dialog).queryByText(/Web 版は画像データと/)).toBeNull();
+
+    // 参照(C)... は入力欄の下の行にあり、右寄せ。
+    const edit = byControlId(dialog, 1614);
+    const browseRow = byControlId(dialog, 1616).parentElement as HTMLElement;
+    expect(browseRow.contains(edit)).toBe(false);
+    expect(
+      edit.compareDocumentPosition(byControlId(dialog, 1616)) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(browseRow.style.justifyContent).toBe('flex-end');
+  });
+
+  it('リスト表示の項目は実物の 18 項目 (この順) で、ボタンと注記も実物どおり', async () => {
+    const { user, dialog } = renderPreferences();
+    const tab = within(dialog).getByRole('tab', { name: 'リスト表示' });
+    await user.click(tab.querySelector('a') ?? tab);
+
+    const rows = [...byControlId(dialog, 1694).querySelectorAll('[data-testid^="column-row-"]')].map(
+      (row) => (row.getAttribute('data-testid') ?? '').replace('column-row-', ''),
+    );
+    // 1694 はチェックリスト側のリスト。既定の 8 項目が先、非表示の 10 項目が末尾
+    // (並びはダイアログ 210 の項目順)。
+    expect(rows.slice(0, 8)).toEqual([
+      'space',
+      'cut',
+      'name',
+      'book',
+      'description',
+      'memo',
+      'updateInfo',
+      'updateStatus',
+    ]);
+    expect(rows.slice(8)).toEqual([
+      'day',
+      'genre',
+      'kana',
+      'pen',
+      'url',
+      'mail',
+      'twitter',
+      'pixiv',
+      'webCatalog',
+      'circleMs',
+    ]);
+    // ラベルは実物の項目名。
+    for (const label of [
+      '参加日',
+      'スペース',
+      'ジャンル',
+      'サークルカット',
+      'サークル名',
+      '読みがな',
+      '執筆者',
+      '発行誌',
+      'URL',
+      'Mail',
+      'Twitter',
+      'Pixiv',
+      '補足',
+      'メモ',
+      '更新情報',
+      'WebCatalog',
+      '更新状態',
+      'Circle.ms',
+    ]) {
+      expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+    }
+    // ボタンは実物の文言。
+    for (const name of ['前へ移動(F)', '後へ移動(B)', '前へ移動(P)', '後へ移動(N)', 'デフォルトに戻す(D)']) {
+      expect(within(dialog).getByRole('button', { name })).toBeInTheDocument();
+    }
+    expect(within(dialog).getByTestId('preferences-list-note')).toHaveTextContent(
+      '※「サークル名」を非表示にすることは',
+    );
+    // 「サークル名」は外せない (5LIST.HTM)。
+    expect(within(dialog).getByLabelText('サークル名')).toBeDisabled();
+  });
+
+  it('チェック色は表示色と印刷色の 2 段 (9 色ずつ) を出し、ボタンは実物の文言', async () => {
+    const { user, dialog } = renderPreferences();
+    const tab = within(dialog).getByRole('tab', { name: 'チェック色' });
+    await user.click(tab.querySelector('a') ?? tab);
+
+    expect(within(dialog).getByText('編集するチェック色(S) :')).toBeInTheDocument();
+    expect(within(dialog).getByText('色の編集(C)')).toBeInTheDocument();
+    expect(within(dialog).getByText('表示色 :')).toBeInTheDocument();
+    expect(within(dialog).getByText('印刷色 :')).toBeInTheDocument();
+    expect(within(dialog).getByText('チェック色名の編集(E)')).toBeInTheDocument();
+    expect(within(dialog).getByText('名称(N) :')).toBeInTheDocument();
+
+    for (const color of [1, 9]) {
+      expect(within(dialog).getByTestId(`display-color-${color}`)).toBeInTheDocument();
+      expect(within(dialog).getByTestId(`print-color-${color}`)).toBeInTheDocument();
+    }
+    expect(within(dialog).getAllByTestId(/^(display|print)-color-\d$/)).toHaveLength(18);
+    expect(within(dialog).getByTestId('preferences-color-reset')).toHaveTextContent(
+      'デフォルト色に戻す(R)',
+    );
+    expect(within(dialog).getByTestId('preferences-color-mac-reset')).toHaveTextContent(
+      'Macデフォルト色に戻す(M)',
+    );
+  });
+
+  it('ボタン行 (OK / キャンセル / 適用(A)) はタブ ページの下に 8px の余白を空ける', () => {
+    const { dialog } = renderPreferences();
+
+    // 実測: プロパティシートのボタン行はタブ ページの下端から 8px。
+    expect(within(dialog).getByTestId('preferences-actions')).toHaveStyle({
+      paddingTop: '8px',
+    });
+    // 変更が無い間は「適用(A)」を使えない (編集すると押せるようになる)。
+    expect(within(dialog).getByTestId('preferences-apply')).toBeDisabled();
+  });
+
+  it('リスト表示のリストは実物の 154x170 で、入りきらない分はスクロールする', async () => {
+    const { user, dialog } = renderPreferences();
+    const tab = within(dialog).getByRole('tab', { name: 'リスト表示' });
+    await user.click(tab.querySelector('a') ?? tab);
+
+    const box = byControlId(dialog, 1694);
+    // 実測: リスト領域は 88x92 DLU = 154x170 (項目が増えるとスクロールバーが出る)。
+    expect(box.style.width).toBe('154px');
+    expect(box.style.height).toBe('170px');
+    expect(box.style.overflow).toBe('auto');
+    expect(within(dialog).getByTestId('preferences-list-note')).toHaveTextContent('できません.');
+  });
+
+  it('前へ移動 / 後へ移動 は選択位置に応じて端でだけ無効になる', async () => {
+    const { user, dialog } = renderPreferences();
+    const tab = within(dialog).getByRole('tab', { name: 'リスト表示' });
+    await user.click(tab.querySelector('a') ?? tab);
+    const prev = () =>
+      within(dialog).getAllByRole('button', { name: '前へ移動(F)' })[0] as HTMLButtonElement;
+    const next = () =>
+      within(dialog).getAllByRole('button', { name: '後へ移動(B)' })[0] as HTMLButtonElement;
+
+    // 実物のリストは最初の項目が選ばれている (先頭なので「前へ移動」だけ無効)。
+    expect(within(dialog).getAllByTestId('column-row-space')[0]).toHaveStyle({
+      background: '#000080',
+    });
+    expect(prev()).toBeDisabled();
+    expect(next()).toBeEnabled();
+
+    // 途中の項目を選ぶと両方押せる。
+    await user.click(within(dialog).getAllByTestId('column-row-cut')[0]);
+    expect(prev()).toBeEnabled();
+    expect(next()).toBeEnabled();
+
+    // 末尾まで移すと「後へ移動」が無効になる (端では該当する側だけ無効)。
+    for (let step = 0; step < 20 && !next().disabled; step += 1) await user.click(next());
+    expect(next()).toBeDisabled();
+    expect(prev()).toBeEnabled();
+  });
+
+  it('移動ボタンは実物の 74x26 で、文字がはみ出さない', async () => {
+    const { user, dialog } = renderPreferences();
+    const tab = within(dialog).getByRole('tab', { name: 'リスト表示' });
+    await user.click(tab.querySelector('a') ?? tab);
+
+    for (const name of ['前へ移動(F)', '後へ移動(B)', '前へ移動(P)', '後へ移動(N)']) {
+      const button = within(dialog).getByRole('button', { name });
+      expect(button).toHaveStyle({ width: '74px', padding: '0 2px' });
+    }
+  });
+
+  it('チェック色のグループはダイアログの内側幅いっぱい (固定幅を付けない)', async () => {
+    const { user, dialog } = renderPreferences();
+    const tab = within(dialog).getByRole('tab', { name: 'チェック色' });
+    await user.click(tab.querySelector('a') ?? tab);
+
+    const groupOf = (legend: string) =>
+      [...dialog.querySelectorAll('fieldset')].find(
+        (field) => field.querySelector(':scope > legend')?.textContent === legend,
+      ) as HTMLElement;
+    // 実測: 色の編集 109 高 / チェック色名の編集 67 高で、幅は内側いっぱい。
+    expect(groupOf('色の編集(C)').style.height).toBe('109px');
+    expect(groupOf('色の編集(C)').style.width).toBe('');
+    expect(groupOf('チェック色名の編集(E)').style.height).toBe('67px');
+    expect(groupOf('チェック色名の編集(E)').style.width).toBe('');
+    // 表示色 / 印刷色の段はどちらも 9 色 (見出しのスペーサ + 9 列)。
+    expect(within(dialog).getByTestId('check-color-display-row').children).toHaveLength(10);
+    expect(within(dialog).getByTestId('check-color-print-row').children).toHaveLength(10);
+    // 9 列が残り幅を等分し (flex は実ブラウザで確認)、スウォッチは実物の比率で
+    // 大きくなる (36x26)。jsdom は flex 短縮形を解釈しないので長辺側だけ見る。
+    const cell = within(dialog).getByTestId('display-color-1').parentElement as HTMLElement;
+    expect(cell.style.minWidth).toBe('0px');
+    expect(within(dialog).getByTestId('display-color-1')).toHaveStyle({
+      maxWidth: '36px',
+      height: '26px',
+    });
+    // 見出し (色1〜色9) の行はスウォッチの真上、2 段の間隔は実物どおり 8px。
+    expect(within(dialog).getByTestId('check-color-labels')).toHaveStyle({
+      height: '16px',
+      paddingBottom: '3px',
+    });
+    expect(within(dialog).getByTestId('check-color-print-row').parentElement).toHaveStyle({
+      gap: '8px',
+    });
+    // チェック色名の編集の行は上下中央 (上 11px / 下 21px + 凡例 10px)。
+    expect(groupOf('チェック色名の編集(E)').style.padding).toBe('11px 8px 21px 10px');
+  });
+
+  it('本文はスクロールさせず、リサイズ ハンドルとサイズ グリップを出さない', () => {
+    const { dialog } = renderPreferences();
+    const body = dialog.querySelector('.window-body') as HTMLElement;
+    const content = body.firstElementChild as HTMLElement;
+
+    // 実測 (439x670) のうち高さはそのまま、幅は日本語ラベルが折り返さない 510。
+    expect(content.style.overflow).toBe('hidden');
+    expect(body.style.overflow).toBe('hidden');
+    expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
+    expect(dialog.querySelector('[class*="resizeHandle"]')).toBeNull();
+    const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
+    expect(root.style.width).toBe('510px');
+    expect(root.style.height).toBe('670px');
+  });
 });
 
 describe('GoogleSearchDialog', () => {
-  it('既定では「両方を含む」が選択されている', () => {
+  it('実物と同じ体裁 (ラジオ / OK・キャンセル) で、既定は「両方を含む」', () => {
     const { dialog } = renderGoogleSearch();
 
     expect(screen.getByText('Google検索設定')).toBeInTheDocument();
@@ -303,124 +575,265 @@ describe('GoogleSearchDialog', () => {
     expect(byControlId(dialog, 1690)).not.toBeChecked();
     expect(byControlId(dialog, 1691)).toBeChecked();
     expect(byControlId(dialog, 1692)).not.toBeChecked();
-    expect(within(dialog).getByLabelText('カスタム設定')).toBe(byControlId(dialog, 1692));
+    expect(within(dialog).getByTestId('google-search-ok')).toHaveTextContent('OK');
+    expect(within(dialog).getByTestId('google-search-cancel')).toHaveTextContent('キャンセル');
   });
 
-  it('カスタム設定以外では項目と条件のコントロールを出さない', () => {
+  it('ラベルが折り返さないギリギリの幅にする (自然幅 351 + 余白 42)', () => {
+    const { dialog } = renderGoogleSearch();
+    const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
+
+    // 一番長いラベルの自然幅は実測 351px。groupbox の内側余白 10px x2 と
+    // ウィンドウ枠・本文余白 22px を足した 393px まで詰める (これ以上狭めると折り返す)。
+    expect(Number.parseFloat(root.style.width)).toBeGreaterThanOrEqual(390);
+    expect(Number.parseFloat(root.style.width)).toBeLessThanOrEqual(400);
+  });
+
+  it('カスタムのコンボは常に出て、カスタム以外では非活性', () => {
     const { dialog } = renderGoogleSearch();
 
-    expect(within(dialog).queryByLabelText('発行誌名')).toBeNull();
-    expect(within(dialog).queryByLabelText('両方を含む')).toBeNull();
+    // カスタム以外でも 3 つを出したまま、押せない状態にする。
+    expect(within(dialog).getByTestId('google-search-field-1')).toBeDisabled();
+    expect(within(dialog).getByTestId('google-search-field-2')).toBeDisabled();
+    expect(within(dialog).getByTestId('google-search-condition')).toBeDisabled();
   });
 
-  it('カスタム設定を選ぶと mode の patch で onChange を呼ぶ', async () => {
-    const { user, props, dialog } = renderGoogleSearch();
+  it('カスタムを選ぶとコンボが活性になる (元のコントロール ID)', async () => {
+    const { user, dialog } = renderGoogleSearch();
 
     await user.click(byControlId(dialog, 1692));
 
-    expect(props.onChange).toHaveBeenCalledTimes(1);
-    expect(props.onChange).toHaveBeenCalledWith({ mode: 'custom' });
+    const field1 = within(dialog).getByTestId('google-search-field-1');
+    expect(field1).toBeEnabled();
+    expect(field1).toHaveValue('circleName');
+    expect([...field1.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
+      'サークル名',
+      '読みがな',
+      '執筆者名',
+      '発行誌名',
+    ]);
+    expect(within(dialog).getByTestId('google-search-field-2')).toHaveValue('penName');
+    expect(within(dialog).getByTestId('google-search-condition')).toHaveValue('and');
+    // 元のコントロール ID (1693 / 1694 / 1695) を保つ。
+    for (const controlId of [1693, 1694, 1695]) {
+      expect(dialog.querySelector(`[data-ctrl-id="${controlId}"]`), String(controlId)).not.toBeNull();
+    }
   });
 
-  it('カスタム設定の項目チェックは fields の patch で onChange を呼ぶ', async () => {
-    const settings: GoogleSearchSettings = {
-      mode: 'custom',
-      fields: { circleName: true, penName: true, bookName: false, circleKana: false },
-      andMode: true,
-    };
-    const { user, props, dialog } = renderGoogleSearch({ settings });
+  it('ボタンは右配置にする (実物は右端に寄る)', () => {
+    const { dialog } = renderGoogleSearch();
 
-    expect(within(dialog).getByLabelText('サークル名')).toBeChecked();
-    expect(within(dialog).getByLabelText('発行誌名')).not.toBeChecked();
-
-    await user.click(within(dialog).getByLabelText('発行誌名'));
-
-    expect(props.onChange).toHaveBeenCalledTimes(1);
-    expect(props.onChange).toHaveBeenCalledWith({
-      fields: { circleName: true, penName: true, bookName: true, circleKana: false },
-    });
+    const ok = within(dialog).getByTestId('google-search-ok');
+    const row = ok.parentElement as HTMLElement;
+    expect(row.style.justifyContent).toBe('flex-end');
+    // OK とキャンセルが同じ行に並ぶ。
+    expect(within(row).getByTestId('google-search-cancel')).toBeInTheDocument();
   });
 
-  it('カスタム設定の条件ラジオは andMode の patch で onChange を呼ぶ', async () => {
-    const settings: GoogleSearchSettings = {
-      mode: 'custom',
-      fields: { circleName: true, penName: true, bookName: false, circleKana: false },
-      andMode: true,
-    };
-    const { user, props, dialog } = renderGoogleSearch({ settings });
+  it('カスタムでも下部の OK / キャンセルが見える高さを確保する', async () => {
+    const { user, dialog } = renderGoogleSearch();
+    const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
 
-    await user.click(within(dialog).getByLabelText('いずれかを含む'));
-
-    expect(props.onChange).toHaveBeenCalledTimes(1);
-    expect(props.onChange).toHaveBeenCalledWith({ andMode: false });
+    // コンボ 3 つぶんの高さを最初から確保しておく (カスタムにしてもボタンが押せる)。
+    expect(Number.parseFloat(root.style.height)).toBeGreaterThanOrEqual(240);
+    expect(within(dialog).getByTestId('google-search-ok')).toBeInTheDocument();
+    await user.click(byControlId(dialog, 1692));
+    expect(within(dialog).getByTestId('google-search-ok')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('google-search-cancel')).toBeInTheDocument();
   });
 
-  it('閉じるは onClose を呼ぶ', async () => {
+  it('OK は編集をまとめて親に出して閉じる', async () => {
     const { user, props, dialog } = renderGoogleSearch();
 
-    await user.click(within(dialog).getByTestId('google-search-close'));
+    await user.click(byControlId(dialog, 1692));
+    await user.selectOptions(within(dialog).getByTestId('google-search-field-1'), 'bookName');
+    await user.selectOptions(within(dialog).getByTestId('google-search-condition'), 'or');
+    await user.click(within(dialog).getByTestId('google-search-ok'));
 
+    expect(props.onChange).toHaveBeenCalledWith({
+      mode: 'custom',
+      field1: 'bookName',
+      field2: 'penName',
+      andMode: false,
+    });
     expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('キャンセルは編集を捨てて閉じる', async () => {
+    const { user, props, dialog } = renderGoogleSearch();
+
+    await user.click(byControlId(dialog, 1692));
+    await user.click(within(dialog).getByTestId('google-search-cancel'));
+
+    expect(props.onChange).not.toHaveBeenCalled();
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('OK まで親に出さない (その場では設定が変わらない)', async () => {
+    const { user, props, dialog } = renderGoogleSearch();
+
+    await user.click(byControlId(dialog, 1690));
+
     expect(props.onChange).not.toHaveBeenCalled();
   });
 });
 
 describe('PageSetupDialog', () => {
-  it('ダイアログ 203 の入力に渡された設定値を表示する', () => {
+  it('実物の項目 (用紙 / 高さ / 幅 / 余白 4 つ / 縦横比を保つ) とプレビューを出す', () => {
     const { dialog } = renderPageSetup({ setup: PAGE_SETUP });
 
     expect(screen.getByText('用紙サイズ・余白の設定')).toBeInTheDocument();
     expect(within(dialog).getByText('用紙サイズ')).toBeInTheDocument();
     expect(within(dialog).getByText('余白')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('DPI')).toHaveValue('600');
-    expect(within(dialog).getByLabelText('用紙幅(mm)')).toHaveValue('210');
-    expect(within(dialog).getByLabelText('用紙高さ(mm)')).toHaveValue('297');
-    expect(within(dialog).getByLabelText('左右余白(mm)')).toHaveValue('10');
-    expect(within(dialog).getByLabelText('上下余白(mm)')).toHaveValue('12');
-    expect(within(dialog).getByLabelText('オフセットX(mm)')).toHaveValue('-2');
-    expect(within(dialog).getByLabelText('オフセットY(mm)')).toHaveValue('3');
+    expect(within(dialog).getByLabelText('用紙(P)')).toHaveValue('B5');
+    expect(within(dialog).getByLabelText('高さ(H)')).toHaveValue('257.0');
+    expect(within(dialog).getByLabelText('幅(W)')).toHaveValue('182.0');
+    expect(within(dialog).getByLabelText('左(L)')).toHaveValue('10.0');
+    expect(within(dialog).getByLabelText('右(R)')).toHaveValue('15.0');
+    expect(within(dialog).getByLabelText('上(T)')).toHaveValue('12.0');
+    expect(within(dialog).getByLabelText('下(B)')).toHaveValue('8.0');
+    expect(within(dialog).getByLabelText('縦横比を保つ(K)')).not.toBeChecked();
+    expect(within(dialog).getAllByText('mm')).toHaveLength(6);
+    expect(within(dialog).getByTestId('page-setup-preview')).toBeInTheDocument();
+    // 実物に無い項目 (DPI / オフセット) は出さない。
+    expect(within(dialog).queryByLabelText('DPI')).toBeNull();
+    expect(within(dialog).queryByText(/オフセット/)).toBeNull();
+    expect(within(dialog).queryByTestId('page-setup-reset')).toBeNull();
   });
 
-  it('DPI を編集すると dpi の patch で onChange を呼ぶ', async () => {
+  it('元リソース 203 のコントロール ID を残す', () => {
+    const { dialog } = renderPageSetup();
+
+    for (const [controlId, tag] of [
+      [1643, 'SELECT'],
+      [1644, 'INPUT'],
+      [1638, 'INPUT'],
+      [1653, 'INPUT'],
+      [1654, 'INPUT'],
+      [1651, 'INPUT'],
+      [1652, 'INPUT'],
+      [1650, 'INPUT'],
+      [1655, 'DIV'],
+      [1, 'BUTTON'],
+      [2, 'BUTTON'],
+    ] as const) {
+      expect(byControlId(dialog, controlId).tagName).toBe(tag);
+    }
+    // 閉じるボタンではなく OK / キャンセル。
+    expect(byControlId(dialog, 1)).toHaveTextContent('OK');
+    expect(byControlId(dialog, 2)).toHaveTextContent('キャンセル');
+  });
+
+  it('用紙を選ぶと幅と高さがその用紙の寸法になる', async () => {
     const { user, props, dialog } = renderPageSetup();
 
-    const input = within(dialog).getByLabelText('DPI');
-    await user.clear(input);
-    await user.type(input, '600');
+    await user.selectOptions(within(dialog).getByLabelText('用紙(P)'), 'A3');
 
-    expect(props.onChange).toHaveBeenLastCalledWith({ dpi: 600 });
-    expect(input).toHaveValue('600');
+    expect(within(dialog).getByLabelText('幅(W)')).toHaveValue('297.0');
+    expect(within(dialog).getByLabelText('高さ(H)')).toHaveValue('420.0');
+
+    await user.click(within(dialog).getByTestId('page-setup-ok'));
+
+    expect(props.onChange).toHaveBeenCalledWith({
+      ...DEFAULT_PAGE_SETUP,
+      paper: 'A3',
+      paperWidth: 297,
+      paperHeight: 420,
+    });
   });
 
-  it('数値でない入力では onChange を呼ばない', async () => {
+  it('縦横比を保つと、幅の変更に高さが追随する', async () => {
+    const { user, dialog } = renderPageSetup(); // 既定: A4 210x297 / 縦横比を保つ = ON
+
+    const width = within(dialog).getByLabelText('幅(W)');
+    await user.clear(width);
+    await user.type(width, '105');
+
+    // 105 * (297 / 210) = 148.5
+    expect(within(dialog).getByLabelText('高さ(H)')).toHaveValue('148.5');
+
+    const height = within(dialog).getByLabelText('高さ(H)');
+    await user.clear(height);
+    await user.type(height, '594');
+
+    // 594 * (210 / 297) = 420
+    expect(within(dialog).getByLabelText('幅(W)')).toHaveValue('420.0');
+  });
+
+  it('縦横比を保つが OFF なら幅と高さは独立する', async () => {
+    const { user, dialog } = renderPageSetup({ setup: PAGE_SETUP });
+
+    const width = within(dialog).getByLabelText('幅(W)');
+    await user.clear(width);
+    await user.type(width, '105');
+
+    expect(within(dialog).getByLabelText('高さ(H)')).toHaveValue('257.0');
+  });
+
+  it('プレビューの破線は余白と同じ倍率で紙の内側に寄る', async () => {
+    const { user, dialog } = renderPageSetup(); // 既定: A4 210x297 / 左 20 上 28.3
+    const paper = within(dialog).getByTestId('page-setup-preview-paper');
+    const margins = within(dialog).getByTestId('page-setup-preview-margins');
+    const paperX = Number(paper.getAttribute('x'));
+    const paperY = Number(paper.getAttribute('y'));
+    const scale = Number(paper.getAttribute('width')) / DEFAULT_PAGE_SETUP.paperWidth;
+
+    // 紙は白、破線は青の 1px 破線。
+    expect(paper.getAttribute('fill')).toBe('#ffffff');
+    expect(margins.getAttribute('stroke')).toBe('#0000ff');
+    expect(margins.getAttribute('stroke-width')).toBe('1');
+    expect(margins.getAttribute('stroke-dasharray')).toBe('3 3');
+
+    expect(Number(margins.getAttribute('x')) - paperX).toBeCloseTo(20 * scale, 1);
+    expect(Number(margins.getAttribute('y')) - paperY).toBeCloseTo(28.3 * scale, 1);
+
+    // 左の余白を 60mm にすると、破線の内側は 3 倍に広がる。
+    const left = within(dialog).getByLabelText('左(L)');
+    await user.clear(left);
+    await user.type(left, '60');
+
+    expect(Number(margins.getAttribute('x')) - paperX).toBeCloseTo(60 * scale, 1);
+    expect(Number(margins.getAttribute('y')) - paperY).toBeCloseTo(28.3 * scale, 1);
+  });
+
+  it('数値でない入力では設定を変えない (OK では元の値のまま)', async () => {
     const { user, props, dialog } = renderPageSetup();
 
-    const input = within(dialog).getByLabelText('用紙幅(mm)');
-    await user.clear(input);
-    await user.type(input, 'abc');
+    const width = within(dialog).getByLabelText('幅(W)');
+    await user.clear(width);
+    await user.type(width, 'abc');
+    await user.type(width, 'x');
+    expect(width).toHaveValue('abcx');
 
-    expect(props.onChange).not.toHaveBeenCalled();
-    expect(input).toHaveValue('abc');
+    await user.click(within(dialog).getByTestId('page-setup-ok'));
+
+    expect(props.onChange).toHaveBeenCalledWith(DEFAULT_PAGE_SETUP);
   });
 
-  it('既定値に戻すは DEFAULT_PAGE_SETUP を渡し、表示も既定値に戻す', async () => {
+  it('OK は編集した設定を渡して閉じる', async () => {
     const { user, props, dialog } = renderPageSetup({ setup: PAGE_SETUP });
 
-    const input = within(dialog).getByLabelText('DPI');
-    await user.click(within(dialog).getByTestId('page-setup-reset'));
+    const left = within(dialog).getByLabelText('左(L)');
+    await user.clear(left);
+    await user.type(left, '25');
+    await user.click(within(dialog).getByLabelText('縦横比を保つ(K)'));
+    await user.click(within(dialog).getByTestId('page-setup-ok'));
 
     expect(props.onChange).toHaveBeenCalledTimes(1);
-    expect(props.onChange).toHaveBeenCalledWith({ ...DEFAULT_PAGE_SETUP });
-    expect(input).toHaveValue(String(DEFAULT_PAGE_SETUP.dpi));
+    expect(props.onChange).toHaveBeenCalledWith({ ...PAGE_SETUP, marginLeft: 25, keepAspect: true });
+    expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('閉じるは onClose を呼ぶ', async () => {
-    const { user, props, dialog } = renderPageSetup();
+  it('キャンセルは編集を捨てて閉じる', async () => {
+    const { user, props, dialog } = renderPageSetup({ setup: PAGE_SETUP });
 
-    await user.click(within(dialog).getByTestId('page-setup-close'));
+    const left = within(dialog).getByLabelText('左(L)');
+    await user.clear(left);
+    await user.type(left, '25');
+    await user.click(within(dialog).getByTestId('page-setup-cancel'));
 
-    expect(props.onClose).toHaveBeenCalledTimes(1);
     expect(props.onChange).not.toHaveBeenCalled();
+    expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 });
 

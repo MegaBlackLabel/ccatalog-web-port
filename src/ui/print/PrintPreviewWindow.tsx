@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Button, Window } from '@megablacklabel/react98retro';
 import type { PageSetup } from '../../domain/app-settings';
 import { assetUrl } from '../asset-url';
+import { formatMm } from './paper-sizes';
 import { PREVIEW_ICONS } from './preview-icons';
 
 export type PrintPreviewWindowProps = {
@@ -229,7 +230,7 @@ export function PrintPreviewWindow({
       <div style={fillContent ? FILL_BODY_STYLE : BODY_STYLE}>
         {pageSetup === undefined ? null : (
           <div data-testid="preview-page-setup" style={PAGE_SETUP_STYLE}>
-            {`用紙 ${pageSetup.paperWidth}×${pageSetup.paperHeight}mm (${pageSetup.dpi}dpi) / 余白 左右 ${pageSetup.marginX}mm 上下 ${pageSetup.marginY}mm`}
+            {`用紙 ${pageSetup.paper} ${formatMm(pageSetup.paperWidth)}×${formatMm(pageSetup.paperHeight)}mm / 余白 左 ${formatMm(pageSetup.marginLeft)} 右 ${formatMm(pageSetup.marginRight)} 上 ${formatMm(pageSetup.marginTop)} 下 ${formatMm(pageSetup.marginBottom)}mm`}
           </div>
         )}
         <div data-testid="preview-button-row" style={BUTTON_ROW_STYLE}>

@@ -1006,6 +1006,10 @@ export function PrintMapDialog({
   return (
     <Window
       data-testid="print-map-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title={settings.blank ? '白地図印刷' : 'マップ印刷'}
       modal
       onClose={onClose}

@@ -249,21 +249,73 @@ describe('PrintProgressDialog (ダイアログ 181 / 301)', () => {
 });
 
 describe('ImageFileOutputDialog (ダイアログ 197)', () => {
-  it('元実装のコントロールを持つ (508 x 405)', () => {
+  it('元実装のコントロールを持つ (518 x 429 = クライアント 508 x 405)', () => {
     const { dialog } = renderImageOutput();
 
     const root = dialog.matches('.window') ? dialog : (dialog.querySelector('.window') as HTMLElement);
-    expect(root.style.width).toBe('508px');
-    expect(root.style.height).toBe('405px');
+    expect(root.style.width).toBe('518px');
+    expect(root.style.height).toBe('429px');
 
     expect(screen.getByTestId('image-output-directory')).toHaveValue('C:\\dump');
     expect(screen.getByTestId('image-output-name')).toHaveValue('ccatalog');
     expect(screen.getByTestId('image-output-format')).toHaveValue('bmp');
     expect(screen.getByTestId('image-output-long-side')).toHaveValue('0');
-    expect(screen.getByTestId('image-output-pages')).toHaveValue('1');
-    expect(screen.getByTestId('image-output-pages')).toBeDisabled();
-    // 出力パスの「参照...」はブラウザからフォルダを辿れないので無効。
-    expect(screen.getByRole('button', { name: '参照...' })).toBeDisabled();
+    // ページ指定は 2 つの数値入力 (1 - 1)。
+    expect(screen.getByTestId('image-output-page-from')).toHaveValue('1');
+    expect(screen.getByTestId('image-output-page-to')).toHaveValue('1');
+    // 出力パスの「参照(C)...」はブラウザからフォルダを辿れないので無効。
+    expect(screen.getByRole('button', { name: '参照(C)...' })).toBeDisabled();
+  });
+
+  it('実物のラベル (アクセラレータ) と注記を出す', () => {
+    const { dialog } = renderImageOutput();
+
+    for (const label of [
+      '出力パス(P) :',
+      '出力ファイル名(B) :',
+      '出力ファイル形式(F) :',
+      '長辺のサイズ(S) :',
+      'すべて(A)',
+      'ページ指定(G) :',
+      'サークルリスト印刷(I)',
+      'サークルカット印刷(U)',
+      'マップ印刷(M)',
+      '白地図印刷(W)',
+      'GDI+を使用しないで印刷(B)',
+      '高解像度で出力(H)',
+    ]) {
+      expect(within(dialog).getByText(label)).toBeInTheDocument();
+    }
+    for (const button of ['参照(C)...', '詳細設定(N)...', '説明(R)...', 'プレビュー(V)', 'OK', 'キャンセル']) {
+      expect(within(dialog).getByRole('button', { name: button })).toBeInTheDocument();
+    }
+    expect(within(dialog).getByText('ピクセル (0, 1〜9999)')).toBeInTheDocument();
+    expect(within(dialog).getByText('※ 0を指定すると、原寸で出力します。')).toBeInTheDocument();
+  });
+
+  it('説明 (1050) は凹んだ枠で、高さを固定する', async () => {
+    const { user, dialog } = renderImageOutput();
+    const description = within(dialog).getByTestId('image-output-description');
+
+    expect(description.className).toContain('sunken-panel');
+    expect(description.style.height).toBe('32px');
+
+    for (const name of ['白地図印刷(W)', 'マップ印刷(M)']) {
+      await user.click(within(dialog).getByRole('radio', { name }));
+      expect(within(dialog).getByTestId('image-output-description').style.height).toBe('32px');
+    }
+  });
+
+  it('本文はスクロールさせず、リサイズ ハンドルとサイズ グリップを出さない', () => {
+    const { dialog } = renderImageOutput();
+    const body = dialog.querySelector('.window-body') as HTMLElement;
+    const content = body.firstElementChild as HTMLElement;
+
+    expect(content.style.overflow).toBe('hidden');
+    expect(body.style.overflow).toBe('hidden');
+    expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
+    // リサイズ ハンドルは resizable={false} で描かれない (実物もサイズ変更不可)。
+    expect(dialog.querySelector('[class*="resizeHandle"]')).toBeNull();
   });
 
   it('元のコントロール ID を保つ (197 のコントロール)', () => {
@@ -317,26 +369,42 @@ describe('ImageFileOutputDialog (ダイアログ 197)', () => {
   it('出力範囲は「すべて」が既定で、ページ指定にすると onChange に出す', async () => {
     const { user, props } = renderImageOutput();
 
-    expect(screen.getByRole('radio', { name: 'すべて' })).toBeChecked();
-    expect(screen.getByTestId('image-output-pages')).toBeDisabled();
+    expect(screen.getByRole('radio', { name: 'すべて(A)' })).toBeChecked();
 
-    await user.click(screen.getByRole('radio', { name: 'ページ指定 :' }));
+    await user.click(screen.getByRole('radio', { name: 'ページ指定(G) :' }));
 
     expect(props.onChange).toHaveBeenCalledWith({ allPages: false });
   });
 
-  it('ページ指定のときはページ番号を入力できる', () => {
-    renderImageOutput({ allPages: false, pageSpec: '1, 3-5' });
+  it('ページ指定は 2 つの数値入力で、範囲を "3-5" の形で出す', async () => {
+    const { user, props } = renderImageOutput({ allPages: false, pageSpec: '3-5' });
 
-    expect(screen.getByRole('radio', { name: 'ページ指定 :' })).toBeChecked();
-    const input = screen.getByTestId('image-output-pages');
-    expect(input).toBeEnabled();
-    expect(input).toHaveValue('1, 3-5');
+    expect(screen.getByRole('radio', { name: 'ページ指定(G) :' })).toBeChecked();
+    const from = screen.getByTestId('image-output-page-from');
+    const to = screen.getByTestId('image-output-page-to');
+    expect(from).toHaveValue('3');
+    expect(to).toHaveValue('5');
+
+    await user.clear(from);
+    await user.type(from, '2');
+
+    expect(props.onChange).toHaveBeenLastCalledWith({ pageSpec: '2-5' });
+  });
+
+  it('ページ範囲が数値でないうちは onChange に出さない', async () => {
+    const onChange = vi.fn();
+    const { user } = renderImageOutput({ allPages: false, pageSpec: '1-3', onChange });
+
+    const to = screen.getByTestId('image-output-page-to');
+    await user.clear(to);
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(to).toHaveValue('');
   });
 
   it('有効範囲とページ指定の説明を出す', () => {
     renderImageOutput({ maxPage: 108 });
-    expect(screen.getByText('（有効範囲 : 1-108）')).toBeInTheDocument();
+    expect(screen.getByText('(有効範囲 : 1-108)')).toBeInTheDocument();
     expect(
       screen.getByText('ページ番号・範囲を、コンマ区切りで入力してください （例 : 1, 3-5）'),
     ).toBeInTheDocument();
@@ -348,15 +416,15 @@ describe('ImageFileOutputDialog (ダイアログ 197)', () => {
       'チェックリストに登録されているサークルを、画像なしの一覧表形式で印刷します。',
     );
 
-    await user.click(screen.getByRole('radio', { name: '白地図印刷' }));
+    await user.click(screen.getByRole('radio', { name: '白地図印刷(W)' }));
 
     expect(props.onChange).toHaveBeenCalledWith({ outputFormat: 'blankMap' });
   });
 
   it.each([
-    ['blankMap', 'マップのみを印刷します。'],
+    ['blankMap', '会場マップのみを印刷します。'],
     ['cut', 'チェックリストに登録されているサークルを、サークルカット画像付きで印刷します。'],
-    ['map', 'マップを、チェックリストに登録されているサークルの配置情報と共に印刷します。'],
+    ['map', '会場マップを、チェックリストに登録されているサークルの配置情報と共に印刷します。'],
   ] as const)('出力形式 %s の説明を出す', (outputFormat, description) => {
     renderImageOutput({ outputFormat });
     expect(screen.getByText(description)).toBeInTheDocument();
@@ -384,10 +452,10 @@ describe('ImageFileOutputDialog (ダイアログ 197)', () => {
   it('高解像度で出力と GDI+ を使用しないで印刷を切り替える', async () => {
     const { user, props } = renderImageOutput();
 
-    await user.click(screen.getByLabelText('高解像度で出力'));
+    await user.click(screen.getByLabelText('高解像度で出力(H)'));
     expect(props.onChange).toHaveBeenCalledWith({ highResolution: true });
 
-    await user.click(screen.getByLabelText('GDI+を使用しないで印刷'));
+    await user.click(screen.getByLabelText('GDI+を使用しないで印刷(B)'));
     expect(props.onChange).toHaveBeenCalledWith({ noGdiPlus: true });
   });
 });

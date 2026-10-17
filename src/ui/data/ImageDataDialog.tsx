@@ -99,6 +99,10 @@ export function ImageDataDialog({
   return (
     <Window
       data-testid="image-data-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="画像データの追加インストールと削除"
       modal
       onClose={onClose}

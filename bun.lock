@@ -5,7 +5,7 @@
     "": {
       "name": "ccatalog-web-port",
       "dependencies": {
-        "@megablacklabel/react98retro": "0.4.8",
+        "@megablacklabel/react98retro": "0.4.9",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
       },
@@ -127,7 +127,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@megablacklabel/react98retro": ["@megablacklabel/react98retro@0.4.8", "https://npm.pkg.github.com/download/@megablacklabel/react98retro/0.4.8/d77fadeed3a679b785ecab3c8551c11ee0c5540e", { "dependencies": { "98.css": "^0.1.21", "clsx": "^2.1.1" }, "peerDependencies": { "react": ">=18", "react-dom": ">=18" } }, "sha512-yTWgP+P14N/Ue1aWM7+ZenvCFR0OziKrO0XZ1BUYKtPU25pWi8iP1YulQpCmoj4RR4X+yeyOkflHOBAOvWVWYw=="],
+    "@megablacklabel/react98retro": ["@megablacklabel/react98retro@0.4.9", "https://npm.pkg.github.com/download/@megablacklabel/react98retro/0.4.9/d464cd74421cad9399010c102bf7a9ac8b5bb210", { "dependencies": { "98.css": "^0.1.21", "clsx": "^2.1.1" }, "peerDependencies": { "react": ">=18", "react-dom": ">=18" } }, "sha512-4lLJ5ZXgRncBsMkjh+Iv6uk6qmcNIqcwHMSiVvkJXPUKwLKHBK125KIwgNSZakaJwGlTMJauHx51Wz+9xRsLfA=="],
 
     "@oxc-project/types": ["@oxc-project/types@0.153.0", "", {}, "sha512-jSNrRIyvPVLL5E1z/tS5zLAprosGz/FuI1PWwEOz59j3E4TTTzSpqKb/RDGqJhhW0QHYISGXxq582wGx6T11Tw=="],
 

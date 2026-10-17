@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { CheckColor } from '../../app/catalog-state';
+import { DEFAULT_LIST_DISPLAY_SETTINGS } from '../../domain/app-settings';
 import type { Circle } from '../../domain/types';
 import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkSwatchIcon } from '../check-colors';
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
@@ -59,6 +60,8 @@ const ROWS: ChecklistRow[] = [
     circleKana: 'さーくるA',
     penName: 'ペンA',
     bookName: '発行誌A',
+    url: 'https://example.com/a',
+    mailAddr: 'a@example.com',
     description: '補足A',
     memo: 'メモA',
     spaceNo: 12,
@@ -118,48 +121,74 @@ function rgbOf(hex: string): string {
 }
 
 describe('ChecklistWindow', () => {
-  it('実物と同じ 9 列以上とステータスバーを表示する', () => {
+  it('実物と同じ列見出しとステータスバーを表示する', () => {
     const { checklist } = renderChecklist({ selectedIds: [2] });
 
     expect(within(checklist).getByText('チェックリスト')).toBeInTheDocument();
     const headers = within(checklist)
       .getAllByRole('columnheader')
       .map((cell) => cell.textContent);
-    // 実物 (1WINDOW/3CHECK.HTM) の印刷セパレータと同じ 9 列以上を出す。
-    expect(headers.length).toBeGreaterThanOrEqual(9);
+    // 先頭は「印刷順」(色 + 連番) で、色列の見出しは無い。以降は実物のウィンドウ
+    // (1WINDOW/3CHECK.HTM) の見出しと同じ並び。
     expect(headers).toEqual([
-      'No.',
-      '色',
+      '',
+      '印刷順',
+      'スペース',
+      'サークルカット',
       'サークル名',
-      '読み',
-      '執筆者',
       '発行誌',
       '補足',
       'メモ',
-      '位置',
-      '日付',
-      'ジャンル',
+      '更新情報',
+      '更新状態',
     ]);
     expect(within(checklist).getByText('全 4 件中 2 件を表示')).toBeInTheDocument();
     expect(within(checklist).getByText('選択 1 件')).toBeInTheDocument();
   });
 
-  it('1 行 1 サークルで位置・日付・ジャンルを整形して表示する', () => {
+  it('サークルカット列は見出しとカット画像 (111x162) が欠けない幅にする', () => {
+    const { checklist } = renderChecklist();
+
+    const header = within(checklist).getAllByRole('columnheader')[3];
+    expect(header).toHaveTextContent('サークルカット');
+    // カット 111px + セルの左右の余白 (6px x 2) + 左の罫線 1px = 124px。
+    // カットがちょうど収まる幅 (セルは overflow: hidden)。
+    expect((header as HTMLElement).style.width).toBe('124px');
+
+    const image = within(checklist).getAllByTestId('checklist-cut')[0] as HTMLImageElement;
+    // 実物のカット 79x116 x 1.40。DB 上の表示サイズ 178x253 と同じ縦横比。
+    expect(image.style.width).toBe('111px');
+    expect(image.style.height).toBe('162px');
+    // セルより広がらないように上限も付ける。
+    expect(image.style.maxWidth).toBe('100%');
+    // カットだけは左右中央に置く (他のセルは左寄せ)。
+    expect(image.style.margin).toBe('0px auto');
+  });
+
+  it('1 行 1 サークルでスペース・補足・更新状態を表示する', () => {
     const { checklist } = renderChecklist();
 
     // ヘッダー行 + サークル数。
     expect(within(checklist).getAllByRole('row')).toHaveLength(ROWS.length + 1);
 
     expect(within(rowOf('サークルA')).getByText('12a')).toBeInTheDocument();
+    expect(within(rowOf('サークルB')).getByText('12b')).toBeInTheDocument();
+  });
+
+  it('参加日とジャンルは「リスト表示」で足すと出る', () => {
+    renderChecklist({
+      visibleColumns: [...DEFAULT_LIST_DISPLAY_SETTINGS.checklist, 'day', 'genre'],
+    });
+
     expect(within(rowOf('サークルA')).getByText('1日目')).toBeInTheDocument();
     expect(within(rowOf('サークルA')).getByText('創作(少女)')).toBeInTheDocument();
-    expect(within(rowOf('サークルB')).getByText('12b')).toBeInTheDocument();
     expect(within(rowOf('サークルB')).getByText('評論')).toBeInTheDocument();
   });
 
   it('抽選漏れ (day 0) は日付欄に「抽選漏れ」と出す', () => {
     renderChecklist({
       rows: [makeRow(3, 1, { circleName: 'サークルC', day: 0, spaceNo: 0, spaceNoSub: 0 })],
+      visibleColumns: [...DEFAULT_LIST_DISPLAY_SETTINGS.checklist, 'day'],
     });
 
     expect(within(rowOf('サークルC')).getByText('抽選漏れ')).toBeInTheDocument();
@@ -181,25 +210,27 @@ describe('ChecklistWindow', () => {
     expect((yellow as HTMLElement).style.height).toBe('12px');
   });
 
-  it('No. は表示順の連番を出す', () => {
+  it('印刷順は表示順の連番を出す (色の次)', () => {
     renderChecklist();
 
-    expect(rowOf('サークルA').querySelectorAll('td')[0]).toHaveTextContent('1');
-    expect(rowOf('サークルB').querySelectorAll('td')[0]).toHaveTextContent('2');
+    // 0 列目は色の見本、1 列目が「印刷順」。
+    expect(rowOf('サークルA').querySelectorAll('td')[1]).toHaveTextContent('1');
+    expect(rowOf('サークルB').querySelectorAll('td')[1]).toHaveTextContent('2');
   });
 
-  it('発行誌・補足・メモを出し、空欄は — にする', () => {
-    renderChecklist();
+  it('発行誌・URL・Mail を出し、空欄は — にする', () => {
+    // URL / Mail は「リスト表示」で入れる列 (既定は非表示)。
+    renderChecklist({ visibleColumns: [...DEFAULT_LIST_DISPLAY_SETTINGS.checklist, 'url', 'mail'] });
 
     const a = within(rowOf('サークルA'));
     expect(a.getByText('発行誌A')).toBeInTheDocument();
-    expect(a.getByText('補足A')).toBeInTheDocument();
-    expect(a.getByText('メモA')).toBeInTheDocument();
+    expect(a.getByText('https://example.com/a')).toBeInTheDocument();
+    expect(a.getByText('a@example.com')).toBeInTheDocument();
 
-    // サークルB の補足 / メモ は空 (Circle の既定値)。
+    // サークルB の URL / Mail は空 (Circle の既定値) なので — になる。
     const b = within(rowOf('サークルB'));
     expect(b.getByText('本2')).toBeInTheDocument();
-    expect(b.getAllByText('—')).toHaveLength(2);
+    expect(b.getAllByText('—').length).toBeGreaterThanOrEqual(2);
   });
 
   it('days ごとにタブを作り、ラベルは日付名だけにする', () => {

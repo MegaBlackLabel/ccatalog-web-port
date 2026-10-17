@@ -65,6 +65,10 @@ export function DuplicateCheckDialog({
   return (
     <Window
       data-testid="duplicate-check-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title="チェックリストへの重複登録の確認"
       modal
       onClose={onClose}

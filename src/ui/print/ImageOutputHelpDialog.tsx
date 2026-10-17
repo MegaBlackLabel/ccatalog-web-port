@@ -88,6 +88,10 @@ export function ImageOutputHelpDialog({
     <div style={DIALOG_LIFT_STYLE}>
       <Window
         data-testid="image-output-help-dialog"
+        // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+        minimizable={false}
+        maximizable={false}
+        resizable={false}
         title="説明"
         modal
         onClose={onClose}

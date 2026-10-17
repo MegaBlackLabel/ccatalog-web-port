@@ -52,48 +52,58 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   linkWindowIconify: false,
 };
 
+/** Google 検索の対象項目 (ダイアログ 212 のコンボ 1693 / 1694)。 */
+export type GoogleSearchField = 'circleName' | 'circleKana' | 'penName' | 'bookName';
+
 /** Google 検索の条件設定 (ダイアログ 212)。 */
 export type GoogleSearchSettings = {
   /** both = 両方を含む / either = いずれかを含む / custom = カスタム設定。 */
   mode: 'both' | 'either' | 'custom';
-  /** custom のときの検索対象項目。 */
-  fields: {
-    circleName: boolean;
-    penName: boolean;
-    bookName: boolean;
-    circleKana: boolean;
-  };
-  /** custom のときの条件 (true = AND)。 */
+  /** custom の項目 1 (1693)。 */
+  field1: GoogleSearchField;
+  /** custom の項目 2 (1694)。 */
+  field2: GoogleSearchField;
+  /** custom の条件 (1695)。true = 両方を含む (AND)。 */
   andMode: boolean;
 };
 
 export const DEFAULT_GOOGLE_SEARCH_SETTINGS: GoogleSearchSettings = {
   mode: 'both',
-  fields: { circleName: true, penName: true, bookName: false, circleKana: false },
+  field1: 'circleName',
+  field2: 'penName',
   andMode: true,
 };
 
 /** 用紙サイズ・余白の設定 (ダイアログ 203 / cpr.ini の [DOCUMENT])。 */
 export type PageSetup = {
-  dpi: number;
-  /** mm */
+  /** 用紙 (コンボ 1643)。'A4' や 'はがき' など (元: プリンタ ドライバの紙名)。 */
+  paper: string;
+  /** 幅 (1638) mm。 */
   paperWidth: number;
-  /** mm */
+  /** 高さ (1644) mm。 */
   paperHeight: number;
-  marginX: number;
-  marginY: number;
-  offsetX: number;
-  offsetY: number;
+  /** 左の余白 (1653) mm。 */
+  marginLeft: number;
+  /** 右の余白 (1654) mm。 */
+  marginRight: number;
+  /** 上の余白 (1651) mm。 */
+  marginTop: number;
+  /** 下の余白 (1652) mm。 */
+  marginBottom: number;
+  /** 縦横比を保つ (1650)。入れると幅 / 高さの変更にもう一方が追随する。 */
+  keepAspect: boolean;
 };
 
 export const DEFAULT_PAGE_SETUP: PageSetup = {
-  dpi: 300,
+  paper: 'A4',
   paperWidth: 210,
   paperHeight: 297,
-  marginX: 0,
-  marginY: 0,
-  offsetX: 0,
-  offsetY: 0,
+  // 実測 (ユーザー提供の実機キャプチャ) の値を既定にする。
+  marginLeft: 20,
+  marginRight: 20,
+  marginTop: 28.3,
+  marginBottom: 28.3,
+  keepAspect: true,
 };
 
 /**
@@ -133,29 +143,77 @@ export const DEFAULT_IMAGE_PATH_SETTINGS: ImagePathSettings = {
 /** リストに出す列 (動作設定の「リスト表示」ページ。元ダイアログ 210)。 */
 export type ListColumnKey =
   | 'color'
+  | 'day'
+  | 'space'
+  | 'genre'
+  | 'cut'
   | 'name'
   | 'kana'
   | 'pen'
   | 'book'
+  | 'url'
+  | 'mail'
+  | 'twitter'
+  | 'pixiv'
   | 'description'
   | 'memo'
-  | 'space'
-  | 'day'
-  | 'genre';
+  | 'updateInfo'
+  | 'webCatalog'
+  | 'updateStatus'
+  | 'circleMs';
 
-/** 列の表示名 (ダイアログ 210 のリスト項目)。 */
+/**
+ * 列の表示名 (ダイアログ 210 のリスト項目)。実物の項目名に合わせる
+ * (実物のリストは 参加日 / スペース / ジャンル / サークルカット / サークル名 / 読みがな /
+ *  執筆者 / 発行誌 / URL / Mail / Twitter / Pixiv / 補足 / メモ / 更新情報 /
+ *  WebCatalog / 更新状態 / Circle.ms の 18 項目)。
+ */
 export const LIST_COLUMN_LABELS: Record<ListColumnKey, string> = {
   color: 'チェック色',
+  day: '参加日',
+  space: 'スペース',
+  genre: 'ジャンル',
+  cut: 'サークルカット',
   name: 'サークル名',
-  kana: '読み',
+  kana: '読みがな',
   pen: '執筆者',
   book: '発行誌',
+  url: 'URL',
+  mail: 'Mail',
+  twitter: 'Twitter',
+  pixiv: 'Pixiv',
   description: '補足',
   memo: 'メモ',
-  space: '位置',
-  day: '日付',
-  genre: 'ジャンル',
+  updateInfo: '更新情報',
+  webCatalog: 'WebCatalog',
+  updateStatus: '更新状態',
+  circleMs: 'Circle.ms',
 };
+
+/**
+ * ダイアログ 210 のリストに並べる項目の順 (実物の 18 項目 = サークル一覧の列と同じ順)。
+ * 表示 / 非表示と並びはこの順を基準にする。
+ */
+export const LIST_COLUMN_ORDER: readonly ListColumnKey[] = [
+  'day',
+  'space',
+  'genre',
+  'cut',
+  'name',
+  'kana',
+  'pen',
+  'book',
+  'url',
+  'mail',
+  'twitter',
+  'pixiv',
+  'description',
+  'memo',
+  'updateInfo',
+  'webCatalog',
+  'updateStatus',
+  'circleMs',
+];
 
 /**
  * リスト表示の設定。項目の並びが表示順 (先頭が左端)。
@@ -169,9 +227,41 @@ export type ListDisplaySettings = {
 };
 
 export const DEFAULT_LIST_DISPLAY_SETTINGS: ListDisplaySettings = {
-  // チェックリストは実物の並び (No. / 色 / サークル名 / 読み / 執筆者 / 発行誌 / 補足 / メモ / 位置 / 日付 / ジャンル)。
-  checklist: ['name', 'kana', 'pen', 'book', 'description', 'memo', 'space', 'day', 'genre'],
-  list: ['name', 'kana', 'pen', 'book', 'space', 'day', 'genre'],
+  // チェックリストの既定は実物のウィンドウ (1WINDOW/3CHECK.HTM) の見出しと同じ並び:
+  // スペース / サークルカット / サークル名 / 発行誌 / 補足 / メモ / 更新情報 / 更新状態。
+  // 先頭の「印刷順」(色 + 連番) は固定列なので、ここには含めない。
+  checklist: [
+    'space',
+    'cut',
+    'name',
+    'book',
+    'description',
+    'memo',
+    'updateInfo',
+    'updateStatus',
+  ],
+  // サークル一覧は実物のウィンドウ (1WINDOW/6LIST.HTM) の列と同じ 18 列
+  // (実物のスクリーンショットから 1 列ずつ読み取った並び)。
+  list: [
+    'day',
+    'space',
+    'genre',
+    'cut',
+    'name',
+    'kana',
+    'pen',
+    'book',
+    'url',
+    'mail',
+    'twitter',
+    'pixiv',
+    'description',
+    'memo',
+    'updateInfo',
+    'webCatalog',
+    'updateStatus',
+    'circleMs',
+  ],
 };
 
 /**

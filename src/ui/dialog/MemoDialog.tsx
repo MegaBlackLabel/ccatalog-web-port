@@ -60,6 +60,10 @@ export function MemoDialog({
   return (
     <Window
       data-testid="memo-dialog"
+      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
+      minimizable={false}
+      maximizable={false}
+      resizable={false}
       title={title}
       modal
       onClose={onClose}

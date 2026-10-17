@@ -187,6 +187,18 @@ describe('StartupConfirmDialog', () => {
     expect(props.onExit).toHaveBeenCalledTimes(1);
     expect(props.onLaunch).not.toHaveBeenCalled();
   });
+
+  // 実物のダイアログはタイトルバーに × だけを出し、端のドラッグでもサイズを変えられない
+  // (Window の minimizable / maximizable / resizable)。
+  it('タイトルバーのボタンは × だけで、リサイズ ハンドルを持たない', () => {
+    const { dialog } = renderStartup();
+
+    const labels = Array.from(dialog.querySelectorAll('.title-bar-controls button')).map((button) =>
+      button.getAttribute('aria-label'),
+    );
+    expect(labels).toEqual(['Close']);
+    expect(dialog.querySelectorAll('[class*="resize"]')).toHaveLength(0);
+  });
 });
 
 describe('SendInfoDialog', () => {
