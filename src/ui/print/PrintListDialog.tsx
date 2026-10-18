@@ -1,12 +1,5 @@
 import type { ChangeEvent, CSSProperties } from 'react';
-import {
-  Button,
-  Checkbox,
-  Dropdown,
-  GroupBox,
-  OptionButton,
-  Window,
-} from '@megablacklabel/react98retro';
+import { Button, Checkbox, Dropdown, GroupBox, OptionButton } from '@megablacklabel/react98retro';
 
 /** 印刷範囲。days は抽選漏れが 0、colors は 1〜9。 */
 export type PrintTarget = {
@@ -35,24 +28,8 @@ export type PrintListSettings = {
   printWholeBlock: boolean;
 };
 
-export type PrintListDialogProps = {
-  settings: PrintListSettings;
-  /** 変更された項目だけを渡す。 */
-  onChange: (patch: Partial<PrintListSettings>) => void;
-  /** プレビュー。現在の設定をそのまま渡す。 */
-  onPreview: (settings: PrintListSettings) => void;
-  /** 閉じる。 */
-  onClose: () => void;
-  /** ウィンドウの初期位置とサイズ (アプリ側のレイアウトが決める)。 */
-  initialX?: number;
-  initialY?: number;
-  width?: number;
-  height?: number;
-  zIndex?: number;
-};
-
-/** タブの中身 (元ダイアログ 163 のクライアント領域)。Window は含まない。 */
-type PrintListPageProps = {
+/** サークルリスト印刷のタブの中身 (元ダイアログ 163 のクライアント領域) の props。 */
+export type PrintListPageProps = {
   settings: PrintListSettings;
   /** 変更された項目だけを渡す。 */
   onChange: (patch: Partial<PrintListSettings>) => void;
@@ -204,20 +181,6 @@ const BODY_STYLE: CSSProperties = {
   minHeight: '100%',
 };
 
-/** ダイアログ本体 (Window の中): ページと閉じるボタンを縦に並べる。 */
-const DIALOG_BODY_STYLE: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-  minHeight: 0,
-};
-
-const DIALOG_FOOTER_STYLE: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'flex-end',
-  flex: '0 0 auto',
-};
-
 const TOP_ROW_STYLE: CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
@@ -321,7 +284,7 @@ const BUTTON_ROW_STYLE: CSSProperties = {
 
 /**
  * サークルリスト印刷のタブの中身 (元ダイアログ 163 のクライアント領域)。
- * Window を含まないので、単体でタブに置ける。
+ * 印刷詳細設定 (プロパティシート 163〜166) のタブ本文として PrintSettingsDialog が載せる。
  */
 export function PrintListPage({ settings, onChange, onPreview }: PrintListPageProps) {
   const { target } = settings;
@@ -550,50 +513,3 @@ export function PrintListPage({ settings, onChange, onPreview }: PrintListPagePr
   );
 }
 
-/**
- * サークルリスト印刷ダイアログ (元ダイアログ 163 / 660 x 442)。
- * 中身は {@link PrintListPage}。
- */
-export function PrintListDialog({
-  settings,
-  onChange,
-  onPreview,
-  onClose,
-  initialX = 300,
-  initialY = 200,
-  width = 660,
-  height = 442,
-  zIndex,
-}: PrintListDialogProps) {
-  return (
-    <Window
-      data-testid="print-list-dialog"
-      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
-      minimizable={false}
-      maximizable={false}
-      resizable={false}
-      title="サークルリスト印刷"
-      modal
-      onClose={onClose}
-      width={width}
-      height={height}
-      initialX={initialX}
-      initialY={initialY}
-      zIndex={zIndex}
-    >
-      <div style={DIALOG_BODY_STYLE}>
-        <PrintListPage
-          settings={settings}
-          onChange={onChange}
-          onPreview={() => onPreview(settings)}
-        />
-        <div style={DIALOG_FOOTER_STYLE}>
-          {/* 2: 元リソース 163 の表には無いが、Web 版はダイアログ側で閉じるボタンを出す。 */}
-          <Button data-ctrl-id={2} onClick={onClose}>
-            閉じる
-          </Button>
-        </div>
-      </div>
-    </Window>
-  );
-}

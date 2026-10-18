@@ -436,6 +436,8 @@ describe('ListWindow', () => {
       expect(button).toHaveAttribute('aria-label', name);
       expect(button).toHaveAttribute('title', name);
       expect(button).toHaveAttribute('data-color', String(color));
+      // ホバー / 押下の浮き出しと使えないときの薄さは共通クラスが受ける (app.css)。
+      expect(button).toHaveClass('toolbar-icon-button');
       // サークルカット ウィンドウの色ボタンと同じ 22x22 + 同じアイコン (ui/check-colors.ts)。
       expect(button).toHaveStyle({ width: '22px', height: '22px' });
       expect(button.querySelector('img')?.getAttribute('src')).toBe(

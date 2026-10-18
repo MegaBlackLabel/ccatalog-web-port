@@ -1,0 +1,75 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD>
+<link rel="stylesheet" type="text/css" href="./../help-scrollbars.css">
+<meta charset="utf-8">
+<meta name="GENERATOR" content="Microsoft&reg; HTML Help Workshop 4.1">
+<link rel="stylesheet" type="text/css" media="screen" href="./../COMMON.CSS">
+<Title>インストール</Title>
+</HEAD>
+<BODY>
+
+<h1>インストール</h1>
+
+<p>
+「コミックマーケット DVD-ROMカタログ」を
+ドライブに挿入して、起動ランチャーから「インストール」を選ぶか、
+ディスクをエクスプローラから開いて、WINDOWS/SETUP.EXE をダブルクリックするとインストーラが起動します。画面の指示に従ってハードディスクにインストールして下さい。</p>
+
+<ul>
+<img src="./../IMAGES/INSTALL.PNG" border=0>
+</ul>
+
+<p>インストール完了後はメニューから起動可能です。プログラムメニューに「コミケットカタログブラウザ」が登録されますので、それを選んで実行して下さい。</p>
+
+<p>ハードディスクには以下のファイルがインストールされます。</p>
+
+<table>
+<tr><td>ccatalog.exe</td><td>カタログブラウザの実行ファイルです</td></tr>
+<tr><td>ccatalog.db</td><td>カタログブラウザの大元のデータベースファイルです</td></tr>
+<tr><td>ccatalog.chm</td><td>カタログブラウザのヘルプファイルです</td></tr>
+<tr><td>cpr.ini</td><td>印刷用の設定ファイルです</td></tr>
+</table>
+
+<p>
+また、インストール情報ファイルとしてsettings.ini が作成されます。
+カタログブラウザのユーザ設定は、インストール時に指定したフォルダに ccatalog.iniとして保存されます。</p>
+個別ユーザ用のデータベースファイルは、同じフォルダに ccatalog.dbとして保存されます。</p>
+
+<p>画像データについては、DVD-ROMのままで扱える他、インストール時に同時にインストールしたり、
+後から追加でハードディスクに対してインストールすることも可能です。
+詳細は<a href="./../6DATA/2IMAGE.HTM">画像データの追加と削除</a>をご参照下さい。</p>
+
+<hr>
+
+<h2>手動でのインストール</h2>
+
+<p>カタログブラウザは前述の4ファイルを任意のフォルダにコピーするだけで動作します。</p>
+<p>settings.ini がない場合は、ユーザ設定ファイルは実行ファイルが存在するフォルダに ccatalog.ini として保存されます。</p>
+
+<h2>起動時のデータベース初期化</h2>
+
+<ul>
+<img src="./../IMAGES/DBINIT.PNG" border=0>
+</ul>
+
+<p>通常、初回起動時には個別ユーザ用にデータベースを初期化するかどうか確認されます。
+「はい」を選択すると、個別ユーザ用にデータベースの内容を複製します。
+「いいえ」を選択すると、標準のデータベースを「読みとり専用」として
+使います。読み取り専用時は「<a href="./../6DATA/1DATA.HTM#add">サークルデータの追加</a>」や
+「<a href="./../6DATA/3UPDATE.HTM">データベースの更新</a>」などの機能は利用できません。
+ここで処理しなくても、
+あとから「<a href="./../6DATA/1DATA.HTM#init">データベースの初期化</a>」で再初期化
+することができます。
+
+<p>
+※DVD-ROMから直接起動した場合は、setting.ini の定義により、
+強制で「読み取り専用」になり、データベースの初期化もできませんのでご注意ください。
+
+<p>
+※手動でコピーインストールして、setting.iniが無い場合は、その場にある
+ccatalog.dbが更新可能な固有のデータベースとして扱われます。
+データベースの初期化も必要ありません。
+
+</BODY>
+</HTML>

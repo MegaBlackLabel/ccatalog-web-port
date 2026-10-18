@@ -647,6 +647,8 @@ describe('DetailWindow', () => {
       const button = within(toolbar).getByRole('button', { name: `色${color}` });
       expect(button).toHaveAttribute('title', `色${color}`);
       expect(button).toHaveAttribute('data-color', String(color));
+      // ホバー / 押下の浮き出しと使えないときの薄さは共通クラスが受ける (app.css)。
+      expect(button).toHaveClass('toolbar-icon-button');
       // 色はサークルカット ウィンドウと同じアイコン (ui/check-colors.ts) で描く。
       expect(button.textContent).toBe('');
       expect(button.querySelector('img')?.getAttribute('src')).toBe(

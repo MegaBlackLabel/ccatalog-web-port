@@ -708,6 +708,27 @@ describe('App — 残りのダイアログをメニューから開ける', () =>
     expect(screen.getByTestId('print-dialog')).toBeInTheDocument();
   });
 
+  it('画像ファイル出力の詳細設定は印刷詳細設定を上に重ね、出力形式のタブで開く', async () => {
+    const { user } = await renderApp();
+    await chooseMenu(user, 'ファイル(F)', /^画像ファイル出力/);
+    const dialog = await screen.findByTestId('image-output-dialog');
+
+    await user.click(within(dialog).getByRole('radio', { name: 'サークルカット印刷(U)' }));
+    await user.click(within(dialog).getByTestId('image-output-details'));
+
+    const settings = await screen.findByTestId('print-settings-dialog');
+    // 選んだ出力形式のタブで開き、画像ファイル出力ダイアログは閉じない (重ねて出す)。
+    expect(within(settings).getByRole('tab', { name: 'サークルカット印刷' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByTestId('image-output-dialog')).toBeInTheDocument();
+
+    await user.click(within(settings).getByTestId('print-settings-cancel'));
+    expect(screen.queryByTestId('print-settings-dialog')).toBeNull();
+    expect(screen.getByTestId('image-output-dialog')).toBeInTheDocument();
+  });
+
   it('ブックマークを追加できる', async () => {
     const { user } = await renderApp();
     await chooseMenu(user, 'ブックマーク(B)', /^このページを追加/);
@@ -747,10 +768,11 @@ describe('App — 残りのダイアログをメニューから開ける', () =>
     await user.click(within(help).getByTestId('image-output-help-close'));
     expect(screen.getByTestId('image-output-dialog')).toBeInTheDocument();
 
-    // 詳細設定 (1051) → 出力形式の詳細 (既定はサークルリスト印刷)。
+    // 詳細設定 (1051) → 印刷詳細設定 (163〜166)。既定の出力形式 (サークルリスト印刷) のタブで開く。
     await user.click(within(dialog).getByTestId('image-output-details'));
-    const details = await screen.findByTestId('print-list-dialog');
-    await user.click(within(details).getByRole('button', { name: '閉じる' }));
+    const details = await screen.findByTestId('print-settings-dialog');
+    await user.click(within(details).getByTestId('print-settings-cancel'));
+    expect(screen.getByTestId('image-output-dialog')).toBeInTheDocument();
 
     // ページ指定で出力 → 指定したページ数がステータスバーに出る (範囲は 1 - 3)。
     await user.click(within(dialog).getByLabelText('ページ指定(G) :'));
@@ -1247,17 +1269,48 @@ describe('App — メニューの残り (ファイル / 表示 / ページ移動
     }
   });
 
-  it('ヘルプの目次 (32815) を開き、キーワードで絞り込める', async () => {
+  it('ヘルプ (32815 目次 / 32816 検索 / 32817 キーワード) は CHM の 3 つのタブを開く', async () => {
+    // 公開資産 (public/help/**) を読むところを、実際と同じ形の応答に差し替える。
+    const hhc =
+      '<html><body><ul>' +
+      '<li><object type="text/sitemap"><param name="Name" value="はじめに">' +
+      '<param name="Local" value="0BASE/1OVERVIE.HTM"></object>' +
+      '<li><object type="text/sitemap"><param name="Name" value="印刷">' +
+      '<param name="Local" value="4PRINT/1PRINT.HTM"></object></ul></body></html>';
+    const hhk =
+      '<html><body><ul><li><object type="text/sitemap"><param name="Name" value="印刷">' +
+      '<param name="Name" value="印刷"><param name="Local" value="4PRINT/1PRINT.HTM"></object>' +
+      '</ul></body></html>';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => ({
+        ok: true,
+        text: async () => (String(url).endsWith('ccatalog.hhk') ? hhk : hhc),
+        json: async () => [],
+      })),
+    );
     const { user } = await renderApp();
 
     await chooseMenu(user, 'ヘルプ(H)', /^目次/);
-    const help = await screen.findByTestId('help-dialog');
-    expect(within(help).getAllByTestId('help-topic').length).toBeGreaterThan(1);
+    const help = await screen.findByTestId('help-window');
+    // 目次 (32815) は目次タブ。実機と同じく、目次の先頭のトピックを出す。
+    expect(within(help).getByRole('tab', { selected: true })).toHaveTextContent('目次(C)');
+    await waitFor(() => expect(within(help).getAllByTestId('help-toc-label')).toHaveLength(2));
+    expect(within(help).getAllByTestId('help-toc-label')[0]).toHaveTextContent('はじめに');
+    expect(screen.getByTestId('help-topic-frame')).toHaveAttribute('src', '/help/0BASE/1OVERVIE.HTM');
 
-    await user.type(within(help).getByLabelText('キーワード'), 'ジャンル表示');
+    // 検索 (32816) / キーワード (32817) はそのタブで開く (タブは中のリンクが切り替える)。
+    const tabLink = (name: string) =>
+      (within(help).getByRole('tab', { name }).querySelector('a') ??
+        within(help).getByRole('tab', { name })) as HTMLElement;
+    await user.click(tabLink('検索(S)'));
+    expect(within(help).getByRole('tab', { selected: true })).toHaveTextContent('検索(S)');
+    await user.click(tabLink('キーワード(N)'));
+    expect(within(help).getByRole('tab', { selected: true })).toHaveTextContent('キーワード(N)');
 
-    await waitFor(() => expect(within(help).getAllByTestId('help-topic')).toHaveLength(1));
-    expect(within(help).getByTestId('help-content')).toHaveTextContent('机');
+    // 閉じる (タイトルバーの ×) で消える。
+    await user.click(within(help).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('help-window')).toBeNull();
   }, 30000);
 
   it('チェックリストの RSS ボタンはダミーの取得結果を出す', async () => {

@@ -366,6 +366,8 @@ describe('ChecklistWindow', () => {
       expect(button).toHaveAttribute('aria-label', name);
       expect(button).toHaveAttribute('title', name);
       expect(button).toHaveAttribute('data-color', String(color));
+      // ホバー / 押下の浮き出しと使えないときの薄さは共通クラスが受ける (app.css)。
+      expect(button).toHaveClass('toolbar-icon-button');
       // サークルカット ウィンドウの色ボタンと同じ 22x22 + 同じアイコン (ui/check-colors.ts)。
       expect(button.style.width).toBe('22px');
       expect(button.style.height).toBe('22px');

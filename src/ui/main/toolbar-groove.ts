@@ -44,6 +44,14 @@ export const TOOLBAR_ICON_BUTTON_STYLE: CSSProperties = {
   boxShadow: 'none',
 };
 
+/**
+ * アイコンだけのボタンの共通クラス。平らな見た目 (境界線も浮き出しも無し) は
+ * `TOOLBAR_ICON_BUTTON_STYLE` が inline で持つが、**ホバー / 押下の浮き出しは inline で
+ * 書けない**ので `src/styles/app.css` がこのクラスに当てる。値はサークルカット /
+ * 会場マップ ウインドウのツールバー ボタン (ライブラリの Toolbar) と同じ。
+ */
+export const TOOLBAR_ICON_BUTTON_CLASS = 'toolbar-icon-button';
+
 /** 押下状態のアイコン ボタン (チェックリストの順番のロック・一覧のソートのロック)。 */
 export const TOOLBAR_PRESSED_STYLE: CSSProperties = {
   borderColor: '#808080 #ffffff #ffffff #808080',

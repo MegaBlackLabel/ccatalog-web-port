@@ -216,6 +216,40 @@ body,
    打ち消さない)。以前は平らに見せるため、ここでホバー / 押下の境界線を !important で
    差し替えていた。 */
 
+/* ツールバーのアイコン ボタン (チェックリスト / サークル一覧 / サークル詳細) の
+   ホバーと押下。普段は平ら (境界線は透明・影なし) で、これは
+   ui/main/toolbar-groove.ts の TOOLBAR_ICON_BUTTON_STYLE が inline で持っている。
+   ホバー / 押下は inline で書けないので、ここで !important で上書きする。
+   値はサークルカット / 会場マップ のツールバー ボタン (ライブラリの Toolbar の
+   `.*Button:hover` / `:active`) とまったく同じ (上が白・左が白の浮き出し /
+   押すと逆になる凹み)。 */
+[data-testid$='-toolbar'] .toolbar-icon-button:not(:disabled):hover {
+  border: 1px solid !important;
+  border-color: #ffffff #808080 #808080 #ffffff !important;
+  box-shadow: none !important;
+}
+
+[data-testid$='-toolbar'] .toolbar-icon-button:not(:disabled):active {
+  border: 1px solid !important;
+  border-color: #808080 #ffffff #ffffff #808080 !important;
+  box-shadow: none !important;
+}
+
+/* 使えないとき (チェックリストで行を選んでいないときなど) は薄くする。
+   ライブラリの Toolbar のボタン (`:disabled{opacity:.5}`) と同じ。 */
+[data-testid$='-toolbar'] .toolbar-icon-button:disabled {
+  opacity: 0.5;
+}
+
+/* ヘルプのナビゲーション パネル (ライブラリの Tabs) は、タブの中身 (目次のツリー /
+   キーワードの索引 / 検索の結果) をウィンドウの下端まで伸ばす (実機のビューアと同じ)。
+   ライブラリの Tabs は fill でも本文に display:flex を入れないので、ここだけ足す。 */
+[data-testid='help-nav'] .help-panel .window-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* ツールバーの並べ替え中: 掴んでいるグループを薄く、挿入位置に縦の目印を出す。
    目印は外側の影で描く (内側の影は中身の下に描かれて左端が隠れるため)。 */
 /* 薄くするのは中身だけ。枠に付けた挿入位置の縦線 (box-shadow) は濃いまま残す */

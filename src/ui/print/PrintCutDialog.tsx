@@ -1,12 +1,5 @@
 import type { ChangeEvent, CSSProperties } from 'react';
-import {
-  Button,
-  Checkbox,
-  Dropdown,
-  GroupBox,
-  OptionButton,
-  Window,
-} from '@megablacklabel/react98retro';
+import { Button, Checkbox, Dropdown, GroupBox, OptionButton } from '@megablacklabel/react98retro';
 
 /** 印刷範囲。days は抽選漏れが 0、colors は 1〜9。 */
 export type PrintCutTarget = {
@@ -51,24 +44,8 @@ export type PrintCutSettings = {
   cutPacking: 'horizontal' | 'vertical';
 };
 
-export type PrintCutDialogProps = {
-  settings: PrintCutSettings;
-  /** 変更された項目だけを渡す。 */
-  onChange: (patch: Partial<PrintCutSettings>) => void;
-  /** プレビュー。現在の設定をそのまま渡す。 */
-  onPreview: (settings: PrintCutSettings) => void;
-  /** 閉じる。 */
-  onClose: () => void;
-  /** ウィンドウの初期位置とサイズ (アプリ側のレイアウトが決める)。 */
-  initialX?: number;
-  initialY?: number;
-  width?: number;
-  height?: number;
-  zIndex?: number;
-};
-
-/** タブの中身 (元ダイアログ 164 のクライアント領域)。Window は含まない。 */
-type PrintCutPageProps = {
+/** サークルカット印刷のタブの中身 (元ダイアログ 164 のクライアント領域) の props。 */
+export type PrintCutPageProps = {
   settings: PrintCutSettings;
   /** 変更された項目だけを渡す。 */
   onChange: (patch: Partial<PrintCutSettings>) => void;
@@ -238,20 +215,6 @@ const BODY_STYLE: CSSProperties = {
   minHeight: '100%',
 };
 
-/** ダイアログ本体 (Window の中): ページと閉じるボタンを縦に並べる。 */
-const DIALOG_BODY_STYLE: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-  minHeight: 0,
-};
-
-const DIALOG_FOOTER_STYLE: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'flex-end',
-  flex: '0 0 auto',
-};
-
 const TOP_ROW_STYLE: CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
@@ -355,7 +318,10 @@ const BUTTON_ROW_STYLE: CSSProperties = {
   paddingTop: 6,
 };
 
-/** タブの中身 (元ダイアログ 164)。Window は出さない。 */
+/**
+ * サークルカット印刷のタブの中身 (元ダイアログ 164 のクライアント領域)。
+ * 印刷詳細設定 (プロパティシート 163〜166) のタブ本文として PrintSettingsDialog が載せる。
+ */
 export function PrintCutPage({ settings, onChange, onPreview }: PrintCutPageProps) {
   const { target } = settings;
 
@@ -619,47 +585,3 @@ export function PrintCutPage({ settings, onChange, onPreview }: PrintCutPageProp
   );
 }
 
-/** サークルカット印刷ダイアログ (元ダイアログ 164)。中身はタブと同じ PrintCutPage。 */
-export function PrintCutDialog({
-  settings,
-  onChange,
-  onPreview,
-  onClose,
-  initialX = 300,
-  initialY = 200,
-  width = 660,
-  height = 442,
-  zIndex,
-}: PrintCutDialogProps) {
-  return (
-    <Window
-      data-testid="print-cut-dialog"
-      // 実物のダイアログは × だけで、最小化/最大化のボタンもサイズ変更も持たない。
-      minimizable={false}
-      maximizable={false}
-      resizable={false}
-      title="サークルカット印刷"
-      modal
-      onClose={onClose}
-      width={width}
-      height={height}
-      initialX={initialX}
-      initialY={initialY}
-      zIndex={zIndex}
-    >
-      <div style={DIALOG_BODY_STYLE}>
-        <PrintCutPage
-          settings={settings}
-          onChange={onChange}
-          onPreview={() => onPreview(settings)}
-        />
-        <div style={DIALOG_FOOTER_STYLE}>
-          {/* 2: 元リソース 164 の表には無いが、Web 版はダイアログ側で閉じるボタンを出す。 */}
-          <Button data-ctrl-id={2} onClick={onClose}>
-            閉じる
-          </Button>
-        </div>
-      </div>
-    </Window>
-  );
-}

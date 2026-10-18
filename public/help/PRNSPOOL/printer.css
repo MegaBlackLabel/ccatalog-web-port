@@ -1,0 +1,37 @@
+
+body {
+	background: #fff;
+	line-height: 130%;
+}
+
+H1 {
+	padding: 0 10px;
+	line-height: 130%;
+	background: #ccf;
+	border: solid;
+	border-color:  #eef #557 #557 #eef;
+	border-width: 4;
+}
+
+H2 {
+	padding: 0 10px;
+	line-height: 130%;
+	background: #ccf;
+	border: solid;
+	border-color:  #eef #557 #557 #eef;
+	border-width: 2;
+}
+
+P {
+	padding: 0 1em;
+}
+
+TABLE {
+	margin: 1em 1em;
+}
+
+P.close {
+	text-align: right;
+	font-size: 80%;
+}
+

@@ -15,6 +15,7 @@ import {
 import type { DropdownOption, TableColumn } from '@megablacklabel/react98retro';
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
 import {
+  TOOLBAR_ICON_BUTTON_CLASS,
   TOOLBAR_ICON_BUTTON_STYLE,
   TOOLBAR_ICON_STYLE,
   TOOLBAR_ITEM_GAP,
@@ -495,6 +496,7 @@ export function ListWindow({
           data-testid="list-search"
           aria-label="検索"
           title="サークルを検索"
+          className={TOOLBAR_ICON_BUTTON_CLASS}
           style={TOOLBAR_ICON_BUTTON_STYLE}
           onClick={onOpenSearch}
         >
@@ -532,6 +534,7 @@ export function ListWindow({
           aria-label="リストロック"
           aria-pressed={locked}
           title={locked ? 'リストのソートのロックを解除' : 'リストのソートのロック'}
+          className={TOOLBAR_ICON_BUTTON_CLASS}
           style={locked ? { ...TOOLBAR_ICON_BUTTON_STYLE, ...TOOLBAR_PRESSED_STYLE } : TOOLBAR_ICON_BUTTON_STYLE}
           onClick={onToggleLock}
         >
@@ -555,6 +558,7 @@ export function ListWindow({
                 aria-label={name}
                 title={name}
                 disabled={!hasSelection}
+                className={TOOLBAR_ICON_BUTTON_CLASS}
                 style={TOOLBAR_ICON_BUTTON_STYLE}
                 onClick={() => onSetColor([...selectedIds], color)}
               >
@@ -581,6 +585,7 @@ export function ListWindow({
           aria-label="チェック解除"
           title="チェックリストから外す"
           disabled={!hasSelection}
+          className={TOOLBAR_ICON_BUTTON_CLASS}
           style={TOOLBAR_ICON_BUTTON_STYLE}
           onClick={() => onRemove([...selectedIds])}
         >

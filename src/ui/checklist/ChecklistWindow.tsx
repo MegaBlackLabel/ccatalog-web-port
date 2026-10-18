@@ -19,6 +19,7 @@ import { assetUrl } from '../asset-url';
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
 import {
   TOOLBAR_CONTENT_HEIGHT,
+  TOOLBAR_ICON_BUTTON_CLASS,
   TOOLBAR_ICON_BUTTON_STYLE,
   TOOLBAR_ICON_STYLE,
   TOOLBAR_ITEM_GAP,
@@ -372,6 +373,7 @@ export function ChecklistWindow({
               aria-pressed={locked}
               aria-label="リストロック"
               title={locked ? 'チェックリストの順番のロックを解除' : 'チェックリストの順番のロック'}
+              className={TOOLBAR_ICON_BUTTON_CLASS}
               style={
                 locked ? { ...TOOLBAR_ICON_BUTTON_STYLE, ...TOOLBAR_PRESSED_STYLE } : TOOLBAR_ICON_BUTTON_STYLE
               }
@@ -384,6 +386,7 @@ export function ChecklistWindow({
               type="button"
               aria-label="印刷順確定"
               title="印刷順確定 (位置順に並べ替える)"
+              className={TOOLBAR_ICON_BUTTON_CLASS}
               style={TOOLBAR_ICON_BUTTON_STYLE}
               onClick={() => onOrderBy('space')}
             >
@@ -395,6 +398,7 @@ export function ChecklistWindow({
               type="button"
               aria-label="RSS"
               title="サークルのRSS情報をネットから取得"
+              className={TOOLBAR_ICON_BUTTON_CLASS}
               style={TOOLBAR_ICON_BUTTON_STYLE}
               onClick={onFetchRss}
             >
@@ -413,6 +417,7 @@ export function ChecklistWindow({
                     aria-label={name}
                     title={name}
                     disabled={!hasSelection}
+                    className={TOOLBAR_ICON_BUTTON_CLASS}
                     style={TOOLBAR_ICON_BUTTON_STYLE}
                     onClick={() => onSetColor([...selectedIds], color)}
                   >
@@ -433,6 +438,7 @@ export function ChecklistWindow({
               aria-label="チェック解除"
               title="チェックリストから外す"
               disabled={!hasSelection}
+              className={TOOLBAR_ICON_BUTTON_CLASS}
               style={TOOLBAR_ICON_BUTTON_STYLE}
               onClick={() => onRemove([...selectedIds])}
             >

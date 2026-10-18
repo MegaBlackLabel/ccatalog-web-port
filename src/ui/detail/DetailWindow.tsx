@@ -8,6 +8,7 @@ import { CHECK_COLOR_IDS, checkColorPalette, checkSwatchIcon } from '../check-co
 // 実物のツールバー アイコン (PE の RT_BITMAP を SVG 化したもの) をそのまま使う。
 import { TOOLBAR_ICONS } from '../main/toolbar-icons';
 import {
+  TOOLBAR_ICON_BUTTON_CLASS,
   TOOLBAR_ICON_BUTTON_STYLE,
   TOOLBAR_ICON_STYLE,
   TOOLBAR_ITEM_GAP,
@@ -527,6 +528,7 @@ export function DetailWindow({
                   aria-label={`色${color}`}
                   title={`色${color}`}
                   disabled={!circle}
+                  className={TOOLBAR_ICON_BUTTON_CLASS}
                   style={TOOLBAR_ICON_BUTTON_STYLE}
                   onClick={() => onSetColor?.(color)}
                 >
@@ -547,6 +549,7 @@ export function DetailWindow({
               type="button"
               data-testid="detail-check-remove"
               disabled={!circle || !checked}
+              className={TOOLBAR_ICON_BUTTON_CLASS}
               style={TOOLBAR_ICON_BUTTON_STYLE}
               onClick={onToggleCheck}
               title="チェックリストから外す"

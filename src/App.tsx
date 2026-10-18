@@ -20,7 +20,7 @@ import { CheckColorDialog } from './ui/checklist/CheckColorDialog';
 import { MapWindow, type MapWindowEntry, type MapWindowSeat } from './ui/map/MapWindow';
 import { AboutDialog } from './ui/dialog/AboutDialog';
 import { CoverDialog } from './ui/dialog/CoverDialog';
-import { HelpDialog, type HelpMode } from './ui/dialog/HelpDialog';
+import { HelpWindow, type HelpPane } from './ui/help/HelpWindow';
 import { GotoPageDialog } from './ui/dialog/GotoPageDialog';
 import { MemoDialog } from './ui/dialog/MemoDialog';
 import { PreferencesDialog } from './ui/dialog/PreferencesDialog';
@@ -50,7 +50,6 @@ import {
   ImageFileOutputDialog,
   type ImageOutputSettings,
 } from './ui/print/ImageFileOutputDialog';
-import { ImageOutputDetailsDialog } from './ui/print/ImageOutputDetailsDialog';
 import { ImageOutputHelpDialog } from './ui/print/ImageOutputHelpDialog';
 import { parsePageSpec } from './ui/print/page-spec';
 import { RoundSwitchDialog } from './ui/data/RoundSwitchDialog';
@@ -252,7 +251,7 @@ const CIRCLE_LINK_FIELDS: Record<number, 'url' | 'twitter' | 'pixiv'> = {
 };
 
 /** ヘルプのメニュー ID → 開き方。 */
-const HELP_MODES: Record<number, HelpMode> = {
+const HELP_MODES: Record<number, HelpPane> = {
   [EXTRA_COMMANDS.helpContents]: 'contents',
   [EXTRA_COMMANDS.helpSearch]: 'search',
   [EXTRA_COMMANDS.helpKeyword]: 'keyword',
@@ -311,7 +310,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     TOOLBAR_BARS.map((bar) => bar.id),
   );
   /** ヘルプ (目次 / 検索 / キーワード)。null なら閉じている。 */
-  const [helpMode, setHelpMode] = useState<HelpMode | null>(null);
+  const [helpPane, setHelpPane] = useState<HelpPane | null>(null);
   /** チェックリストの読み込みダイアログの適用先 (開く = 入れ替え / 追加読み込み = 追記)。 */
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
   const [dialog, setDialog] = useState<DialogKey>(null);
@@ -1299,7 +1298,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         case EXTRA_COMMANDS.helpContents:
         case EXTRA_COMMANDS.helpSearch:
         case EXTRA_COMMANDS.helpKeyword:
-          setHelpMode(HELP_MODES[command]);
+          setHelpPane(HELP_MODES[command]);
           break;
         case EXTRA_COMMANDS.supportPage:
           window.open(SUPPORT_URL, '_blank', 'noreferrer');
@@ -1809,10 +1808,10 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         />
       )}
 
-      {helpMode !== null && (
+      {helpPane !== null && (
         // 印刷ダイアログ (1538) の「詳細説明」からも開くため、ダイアログの上に重ねる。
         <div style={DIALOG_LIFT_STYLE}>
-          <HelpDialog mode={helpMode} onClose={() => setHelpMode(null)} />
+          <HelpWindow pane={helpPane} onClose={() => setHelpPane(null)} />
         </div>
       )}
 
@@ -1878,7 +1877,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
               setPrintSettingsOpen(true);
             }}
             // 詳細説明 (1642)。実物はヘルプ (CHM) を開くので、Web 版はヘルプの目次を出す。
-            onHelp={() => setHelpMode('contents')}
+            onHelp={() => setHelpPane('contents')}
             // プレビュー (1052)。選んだ印刷形式のプレビューを開く。
             onPreview={openPrintPreview}
             onClose={() => {
@@ -1974,21 +1973,18 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
               setDialog(null);
             }}
           />
-          {/* 詳細設定は別ウィンドウとして出す (画像ファイル出力の上に重ねる)。 */}
+          {/* 詳細設定 (1051) は印刷詳細設定 (163〜166) を上に重ねる。出力形式のタブで開く。 */}
           {imageDetailsOpen && (
-            <ImageOutputDetailsDialog
-              outputFormat={imageOutput.outputFormat}
-              listSettings={printListSettings}
-              cutSettings={printCutSettings}
-              mapSettings={printMapSettings}
-              onListChange={(patch) => setPrintListSettings((value) => ({ ...value, ...patch }))}
-              onCutChange={(patch) => setPrintCutSettings((value) => ({ ...value, ...patch }))}
-              onMapChange={(patch) => setPrintMapSettings((value) => ({ ...value, ...patch }))}
-              onPreview={() => openPreview('プレビュー - 画像ファイル出力', Math.max(1, lastPage))}
-              onClose={() => setImageDetailsOpen(false)}
-              initialX={820}
-              initialY={120}
-            />
+            <div style={DIALOG_LIFT_STYLE}>
+              {/* 印刷ダイアログの詳細設定と同じ置き方 (右隣に重ねる)。 */}
+              <PrintSettingsDialog
+                {...printSettingsProps}
+                initialTab={imageOutput.outputFormat}
+                onClose={() => setImageDetailsOpen(false)}
+                initialX={820}
+                initialY={120}
+              />
+            </div>
           )}
         </>
       )}

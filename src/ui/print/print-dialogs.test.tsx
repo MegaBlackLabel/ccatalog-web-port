@@ -1,14 +1,14 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_PRINT_CUT_SETTINGS, PrintCutDialog, PrintCutPage } from './PrintCutDialog';
-import type { PrintCutDialogProps, PrintCutSettings } from './PrintCutDialog';
+import { DEFAULT_PRINT_CUT_SETTINGS, PrintCutPage } from './PrintCutDialog';
+import type { PrintCutPageProps, PrintCutSettings } from './PrintCutDialog';
 import { PRINTERS, PrintDialog } from './PrintDialog';
 import type { PrintDialogProps } from './PrintDialog';
-import { DEFAULT_PRINT_LIST_SETTINGS, PrintListDialog, PrintListPage } from './PrintListDialog';
-import type { PrintListDialogProps, PrintListSettings, PrintTarget } from './PrintListDialog';
-import { DEFAULT_PRINT_MAP_SETTINGS, PrintMapDialog, PrintMapPage } from './PrintMapDialog';
-import type { PrintMapDialogProps, PrintMapSettings } from './PrintMapDialog';
+import { DEFAULT_PRINT_LIST_SETTINGS, PrintListPage } from './PrintListDialog';
+import type { PrintListPageProps, PrintListSettings, PrintTarget } from './PrintListDialog';
+import { DEFAULT_PRINT_MAP_SETTINGS, PrintMapPage } from './PrintMapDialog';
+import type { PrintMapPageProps, PrintMapSettings } from './PrintMapDialog';
 
 /** 印刷範囲のフィクスチャ。既定から外した値にして、変更時に他の項目が保たれるかを見る。 */
 const TARGET: PrintTarget = { days: [2], halls: ['東1'], colors: [3] };
@@ -19,17 +19,16 @@ const CUT_SETTINGS: PrintCutSettings = { ...DEFAULT_PRINT_CUT_SETTINGS, target: 
 
 const MAP_SETTINGS: PrintMapSettings = { ...DEFAULT_PRINT_MAP_SETTINGS, target: TARGET };
 
-function renderList(overrides: Partial<PrintListDialogProps> = {}) {
-  const props: PrintListDialogProps = {
+function renderList(overrides: Partial<PrintListPageProps> = {}) {
+  const props: PrintListPageProps = {
     settings: LIST_SETTINGS,
     onChange: vi.fn(),
     onPreview: vi.fn(),
-    onClose: vi.fn(),
     ...overrides,
   };
   const user = userEvent.setup();
-  const view = render(<PrintListDialog {...props} />);
-  return { user, props, dialog: view.getByTestId('print-list-dialog') };
+  const view = render(<PrintListPage {...props} />);
+  return { user, props, page: view.container };
 }
 
 /**
@@ -45,9 +44,6 @@ const LIST_CONTROL_IDS: readonly number[] = [
   1139, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1148, 1149, 1150,
   1719,
 ];
-
-/** 閉じるボタン (元リソース 163 の表には無く、Web 版がダイアログ側で出す)。 */
-const LIST_CLOSE_CONTROL_ID = 2;
 
 /**
  * UI-SPEC.md ダイアログ 164 (サークルカット印刷 / 660 x 442) の表にあるコントロール ID。
@@ -71,9 +67,6 @@ const CUT_CONTROL_IDS: readonly number[] = [
   // プレビュー
   1247,
 ];
-
-/** 閉じるボタン (元リソース 164 の表には無く、Web 版がダイアログ側で出す)。 */
-const CUT_CLOSE_CONTROL_ID = 2;
 
 /**
  * UI-SPEC.md ダイアログ 165 (マップ印刷 / 660 x 442) の表にあるコントロール ID。
@@ -118,9 +111,6 @@ const BLANK_MAP_CONTROL_IDS: readonly number[] = [
   1447,
 ];
 
-/** 閉じるボタン (元リソース 165 / 166 の表には無く、Web 版がダイアログ側で出す)。 */
-const MAP_CLOSE_CONTROL_ID = 2;
-
 /** data-ctrl-id を数値で集める。 */
 function controlIds(root: HTMLElement): number[] {
   return [...root.querySelectorAll('[data-ctrl-id]')].map((element) =>
@@ -135,60 +125,24 @@ function control(root: HTMLElement, controlId: number): HTMLElement {
   return element as HTMLElement;
 }
 
-function renderListPage() {
-  const props = {
-    settings: LIST_SETTINGS,
-    onChange: vi.fn(),
-    onPreview: vi.fn(),
-  };
-  const user = userEvent.setup();
-  const view = render(<PrintListPage {...props} />);
-  return { user, props, page: view.container };
-}
-
-function renderCut(overrides: Partial<PrintCutDialogProps> = {}) {
-  const props: PrintCutDialogProps = {
+function renderCut(overrides: Partial<PrintCutPageProps> = {}) {
+  const props: PrintCutPageProps = {
     settings: CUT_SETTINGS,
     onChange: vi.fn(),
     onPreview: vi.fn(),
-    onClose: vi.fn(),
     ...overrides,
-  };
-  const user = userEvent.setup();
-  const view = render(<PrintCutDialog {...props} />);
-  return { user, props, dialog: view.getByTestId('print-cut-dialog') };
-}
-
-function renderCutPage() {
-  const props = {
-    settings: CUT_SETTINGS,
-    onChange: vi.fn(),
-    onPreview: vi.fn(),
   };
   const user = userEvent.setup();
   const view = render(<PrintCutPage {...props} />);
   return { user, props, page: view.container };
 }
 
-function renderMap(overrides: Partial<PrintMapDialogProps> = {}) {
-  const props: PrintMapDialogProps = {
+function renderMap(overrides: Partial<PrintMapPageProps> = {}) {
+  const props: PrintMapPageProps = {
     settings: MAP_SETTINGS,
     onChange: vi.fn(),
     onPreview: vi.fn(),
-    onClose: vi.fn(),
     ...overrides,
-  };
-  const user = userEvent.setup();
-  const view = render(<PrintMapDialog {...props} />);
-  return { user, props, dialog: view.getByTestId('print-map-dialog') };
-}
-
-function renderMapPage(blank = false) {
-  const settings: PrintMapSettings = { ...MAP_SETTINGS, blank };
-  const props = {
-    settings,
-    onChange: vi.fn(),
-    onPreview: vi.fn(),
   };
   const user = userEvent.setup();
   const view = render(<PrintMapPage {...props} />);
@@ -207,76 +161,75 @@ function renderPrint(overrides: Partial<PrintDialogProps> = {}) {
   return { user, props, dialog: view.getByTestId('print-dialog') };
 }
 
-describe('PrintListDialog', () => {
-  it('タイトルと印刷範囲・印刷項目・改ページ・レイアウトの各コントロールを表示する', () => {
-    const { dialog } = renderList();
+describe('PrintListPage', () => {
+  it('印刷範囲・印刷項目・改ページ・レイアウトの各コントロールを表示する', () => {
+    const { page } = renderList();
 
-    expect(screen.getByText('サークルリスト印刷')).toBeInTheDocument();
     // 印刷範囲 (日付 / ホール / チェック色)。
     for (const label of ['1日目', '2日目', '3日目', '4日目', '抽選漏れ']) {
-      expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+      expect(within(page).getByLabelText(label)).toBeInTheDocument();
     }
-    expect(within(dialog).getByLabelText('東1')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('西1')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('南4')).toBeInTheDocument();
+    expect(within(page).getByLabelText('東1')).toBeInTheDocument();
+    expect(within(page).getByLabelText('西1')).toBeInTheDocument();
+    expect(within(page).getByLabelText('南4')).toBeInTheDocument();
     // 元実装の 3 列目 (まとめホール)。
-    expect(within(dialog).getByLabelText('東123')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('東456')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('西12')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('南12')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('南34')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('色1')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('色9')).toBeInTheDocument();
+    expect(within(page).getByLabelText('東123')).toBeInTheDocument();
+    expect(within(page).getByLabelText('東456')).toBeInTheDocument();
+    expect(within(page).getByLabelText('西12')).toBeInTheDocument();
+    expect(within(page).getByLabelText('南12')).toBeInTheDocument();
+    expect(within(page).getByLabelText('南34')).toBeInTheDocument();
+    expect(within(page).getByLabelText('色1')).toBeInTheDocument();
+    expect(within(page).getByLabelText('色9')).toBeInTheDocument();
     // 印刷項目 (元実装の 163 に補足を拡大 / メモを拡大は無い)。
-    expect(within(dialog).getByLabelText('サークル名')).toBeChecked();
-    expect(within(dialog).queryByLabelText('補足を拡大')).toBeNull();
-    expect(within(dialog).queryByLabelText('メモを拡大')).toBeNull();
+    expect(within(page).getByLabelText('サークル名')).toBeChecked();
+    expect(within(page).queryByLabelText('補足を拡大')).toBeNull();
+    expect(within(page).queryByLabelText('メモを拡大')).toBeNull();
     // 改ページとレイアウト。
-    expect(within(dialog).getByText('印刷順 :')).toBeInTheDocument();
-    expect(within(dialog).getByText('改ページ条件 :')).toBeInTheDocument();
-    expect(within(dialog).getByRole('combobox', { name: 'レイアウト' })).toHaveValue('portrait');
-    expect(within(dialog).getByLabelText('サークル通し番号の印刷')).not.toBeChecked();
-    expect(within(dialog).getByLabelText('チェック色一覧の印刷')).not.toBeChecked();
-    expect(within(dialog).getByLabelText('ブロックの全サークルを印刷')).not.toBeChecked();
+    expect(within(page).getByText('印刷順 :')).toBeInTheDocument();
+    expect(within(page).getByText('改ページ条件 :')).toBeInTheDocument();
+    expect(within(page).getByRole('combobox', { name: 'レイアウト' })).toHaveValue('portrait');
+    expect(within(page).getByLabelText('サークル通し番号の印刷')).not.toBeChecked();
+    expect(within(page).getByLabelText('チェック色一覧の印刷')).not.toBeChecked();
+    expect(within(page).getByLabelText('ブロックの全サークルを印刷')).not.toBeChecked();
   });
 
   it('色の編集ボタンは無効 (チェック色ダイアログが担当する)', () => {
-    const { dialog } = renderList();
+    const { page } = renderList();
 
-    expect(within(dialog).getByRole('button', { name: '色の編集...' })).toBeDisabled();
+    expect(within(page).getByRole('button', { name: '色の編集...' })).toBeDisabled();
   });
 
   it('日付のチェックを入れると、他の日付を保ったまま days に足す', async () => {
-    const { user, props, dialog } = renderList();
+    const { user, props, page } = renderList();
 
-    await user.click(within(dialog).getByLabelText('1日目'));
+    await user.click(within(page).getByLabelText('1日目'));
 
     expect(props.onChange).toHaveBeenCalledTimes(1);
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, days: [2, 1] } });
   });
 
   it('日付のチェックを外すと days から外す', async () => {
-    const { user, props, dialog } = renderList({
+    const { user, props, page } = renderList({
       settings: { ...LIST_SETTINGS, target: { ...TARGET, days: [1, 2] } },
     });
 
-    await user.click(within(dialog).getByLabelText('1日目'));
+    await user.click(within(page).getByLabelText('1日目'));
 
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, days: [2] } });
   });
 
   it('抽選漏れは 0 として days に入れる', async () => {
-    const { user, props, dialog } = renderList();
+    const { user, props, page } = renderList();
 
-    await user.click(within(dialog).getByLabelText('抽選漏れ'));
+    await user.click(within(page).getByLabelText('抽選漏れ'));
 
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, days: [2, 0] } });
   });
 
   it('ホールのチェックを入れると halls に足す', async () => {
-    const { user, props, dialog } = renderList();
+    const { user, props, page } = renderList();
 
-    await user.click(within(dialog).getByLabelText('南4'));
+    await user.click(within(page).getByLabelText('南4'));
 
     expect(props.onChange).toHaveBeenCalledWith({
       target: { ...TARGET, halls: ['東1', '南4'] },
@@ -284,9 +237,9 @@ describe('PrintListDialog', () => {
   });
 
   it('印刷項目のチェックを外すと items から外す', async () => {
-    const { user, props, dialog } = renderList();
+    const { user, props, page } = renderList();
 
-    await user.click(within(dialog).getByLabelText('サークル名'));
+    await user.click(within(page).getByLabelText('サークル名'));
 
     expect(props.onChange).toHaveBeenCalledWith({
       items: ['読み', '執筆者', '発行誌', '位置', '日付', 'ジャンル'],
@@ -294,62 +247,50 @@ describe('PrintListDialog', () => {
   });
 
   it('改ページ条件を選ぶと pageBreakBy を変える', async () => {
-    const { user, props, dialog } = renderList();
+    const { user, props, page } = renderList();
 
-    await user.click(within(dialog).getByRole('radio', { name: 'ブロック' }));
+    await user.click(within(page).getByRole('radio', { name: 'ブロック' }));
 
     expect(props.onChange).toHaveBeenCalledWith({ pageBreakBy: 'block' });
   });
 
   it('レイアウトのチェックを入れると printSequenceNumber を立てる', async () => {
-    const { user, props, dialog } = renderList();
+    const { user, props, page } = renderList();
 
-    await user.click(within(dialog).getByLabelText('サークル通し番号の印刷'));
+    await user.click(within(page).getByLabelText('サークル通し番号の印刷'));
 
     expect(props.onChange).toHaveBeenCalledWith({ printSequenceNumber: true });
   });
 
-  it('プレビューは現在の設定をそのまま渡す', async () => {
-    const { user, props, dialog } = renderList();
+  it('プレビューは onPreview を呼ぶ', async () => {
+    const { user, props, page } = renderList();
 
-    await user.click(within(dialog).getByTestId('print-list-preview'));
+    await user.click(within(page).getByTestId('print-list-preview'));
 
     expect(props.onPreview).toHaveBeenCalledTimes(1);
-    expect(props.onPreview).toHaveBeenCalledWith(LIST_SETTINGS);
-    expect(props.onClose).not.toHaveBeenCalled();
   });
 
   it('プレビュー ボタンは実物の 93x21 (UI-SPEC ダイアログ 163)', () => {
-    const { dialog } = renderList();
-    const preview = dialog.querySelector('[data-testid="print-list-preview"]') as HTMLElement;
+    const { page } = renderList();
+    const preview = page.querySelector('[data-testid="print-list-preview"]') as HTMLElement;
     expect(preview.style.width).toBe('93px');
     expect(preview.style.height).toBe('21px');
   });
 
-  it('閉じるは onClose を呼び、設定は変えない', async () => {
-    const { user, props, dialog } = renderList();
-
-    await user.click(within(dialog).getByRole('button', { name: '閉じる' }));
-
-    expect(props.onClose).toHaveBeenCalledTimes(1);
-    expect(props.onChange).not.toHaveBeenCalled();
-    expect(props.onPreview).not.toHaveBeenCalled();
-  });
-
   it('仕様 (UI-SPEC.md ダイアログ 163) の全コントロール ID を data-ctrl-id として持つ', () => {
-    const { dialog } = renderList();
+    const { page } = renderList();
 
-    const ids = controlIds(dialog);
+    const ids = controlIds(page);
 
-    expect(ids).toEqual(expect.arrayContaining([...LIST_CONTROL_IDS, LIST_CLOSE_CONTROL_ID]));
+    expect(ids).toEqual(expect.arrayContaining([...LIST_CONTROL_IDS]));
     // 件数も見て、ID の欠落と重複 (同じ ID を 2 つの要素に付ける) の両方を検出する。
-    expect(ids).toHaveLength(LIST_CONTROL_IDS.length + 1);
+    expect(ids).toHaveLength(LIST_CONTROL_IDS.length);
   });
 
   it('グループは実物と同じ並び (印刷範囲 > 日付 > ホール > チェック色 > 右上 印刷項目 / 左下 改ページ > レイアウト)', () => {
-    const { dialog } = renderList();
+    const { page } = renderList();
 
-    const legends = [...dialog.querySelectorAll('fieldset > legend')].map(
+    const legends = [...page.querySelectorAll('fieldset > legend')].map(
       (legend) => legend.textContent,
     );
 
@@ -365,9 +306,9 @@ describe('PrintListDialog', () => {
   });
 
   it('グループの寸法は実物の実測どおり (印刷範囲 470x273 / 印刷項目 161x273 / 改ページ 131x213 / レイアウト 213 以上)', () => {
-    const { dialog } = renderList();
+    const { page } = renderList();
     const groupOf = (legend: string) =>
-      [...dialog.querySelectorAll('fieldset')].find(
+      [...page.querySelectorAll('fieldset')].find(
         (field) => field.querySelector(':scope > legend')?.textContent === legend,
       ) as HTMLElement;
 
@@ -392,8 +333,8 @@ describe('PrintListDialog', () => {
   });
 
   it('印刷順は元実装と同じ 4 項目で、選ぶと pageBreakOrder を変える', async () => {
-    const { user, props, dialog } = renderList();
-    const order = within(dialog).getByRole('combobox', { name: '印刷順' });
+    const { user, props, page } = renderList();
+    const order = within(page).getByRole('combobox', { name: '印刷順' });
 
     expect([...order.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
       'チェックリスト順',
@@ -409,10 +350,10 @@ describe('PrintListDialog', () => {
   });
 
   it('レイアウトは元実装と同じ 5 タイプで、選ぶと layout を変える', async () => {
-    const { user, props, dialog } = renderList();
-    const layout = within(dialog).getByRole('combobox', { name: 'レイアウト' });
+    const { user, props, page } = renderList();
+    const layout = within(page).getByRole('combobox', { name: 'レイアウト' });
 
-    expect(layout).toBe(control(dialog, 1145));
+    expect(layout).toBe(control(page, 1145));
     expect([...layout.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
       '縦向き',
       '縦向き (フォント大)',
@@ -421,8 +362,8 @@ describe('PrintListDialog', () => {
       '横向き 2段組',
     ]);
     // 1146 はレイアウトの見本を描く枠。資源では空で、Web 版も空のまま出す。
-    expect(control(dialog, 1146)).toBeEmptyDOMElement();
-    expect(within(dialog).getByTestId('print-list-layout-frame')).toBeEmptyDOMElement();
+    expect(control(page, 1146)).toBeEmptyDOMElement();
+    expect(within(page).getByTestId('print-list-layout-frame')).toBeEmptyDOMElement();
 
     await user.selectOptions(
       layout,
@@ -433,9 +374,9 @@ describe('PrintListDialog', () => {
   });
 
   it('まとめホール (東123 など) のチェックを入れると halls に足す', async () => {
-    const { user, props, dialog } = renderList();
+    const { user, props, page } = renderList();
 
-    await user.click(within(dialog).getByLabelText('東123'));
+    await user.click(within(page).getByLabelText('東123'));
 
     expect(props.onChange).toHaveBeenCalledWith({
       target: { ...TARGET, halls: ['東1', '東123'] },
@@ -443,63 +384,49 @@ describe('PrintListDialog', () => {
   });
 
   it('チェック色の見本色 (1120-1128) を元の色で表示する', () => {
-    const { dialog } = renderList();
+    const { page } = renderList();
 
-    expect(control(dialog, 1120)).toHaveStyle({ backgroundColor: '#ff0000' });
-    expect(control(dialog, 1121)).toHaveStyle({ backgroundColor: '#ff8000' });
-    expect(control(dialog, 1122)).toHaveStyle({ backgroundColor: '#ffff00' });
-    expect(control(dialog, 1123)).toHaveStyle({ backgroundColor: '#008000' });
-    expect(control(dialog, 1124)).toHaveStyle({ backgroundColor: '#00ffff' });
-    expect(control(dialog, 1125)).toHaveStyle({ backgroundColor: '#0000c0' });
-    expect(control(dialog, 1126)).toHaveStyle({ backgroundColor: '#800080' });
-    expect(control(dialog, 1127)).toHaveStyle({ backgroundColor: '#ff00ff' });
-    expect(control(dialog, 1128)).toHaveStyle({ backgroundColor: '#808080' });
+    expect(control(page, 1120)).toHaveStyle({ backgroundColor: '#ff0000' });
+    expect(control(page, 1121)).toHaveStyle({ backgroundColor: '#ff8000' });
+    expect(control(page, 1122)).toHaveStyle({ backgroundColor: '#ffff00' });
+    expect(control(page, 1123)).toHaveStyle({ backgroundColor: '#008000' });
+    expect(control(page, 1124)).toHaveStyle({ backgroundColor: '#00ffff' });
+    expect(control(page, 1125)).toHaveStyle({ backgroundColor: '#0000c0' });
+    expect(control(page, 1126)).toHaveStyle({ backgroundColor: '#800080' });
+    expect(control(page, 1127)).toHaveStyle({ backgroundColor: '#ff00ff' });
+    expect(control(page, 1128)).toHaveStyle({ backgroundColor: '#808080' });
   });
-});
 
-describe('PrintListPage', () => {
-  it('Window を出さずにダイアログと同じコントロールを表示する', () => {
-    const { page } = renderListPage();
-    const ids = controlIds(page);
+  it('Window を出さず、閉じる ボタンも持たない (タブの中身だけを出す)', () => {
+    const { page } = renderList();
 
     expect(screen.queryByTestId('print-list-dialog')).toBeNull();
-    expect(ids).toEqual(expect.arrayContaining([...LIST_CONTROL_IDS]));
-    expect(ids).toHaveLength(LIST_CONTROL_IDS.length);
-    // 閉じるボタンはダイアログ側が持つ。
-    expect(page.querySelector(`[data-ctrl-id="${LIST_CLOSE_CONTROL_ID}"]`)).toBeNull();
-  });
-
-  it('プレビューは onPreview を呼ぶ', async () => {
-    const { user, props, page } = renderListPage();
-
-    await user.click(within(page).getByTestId('print-list-preview'));
-
-    expect(props.onPreview).toHaveBeenCalledTimes(1);
     expect(within(page).queryByRole('button', { name: '閉じる' })).toBeNull();
+    // 閉じるボタン (元リソース 163 の表には無く、Web 版がダイアログ側で出していた 2) は印刷詳細設定側が持つ。
+    expect(page.querySelector('[data-ctrl-id="2"]')).toBeNull();
   });
 });
 
-describe('PrintCutDialog', () => {
-  it('タイトルと印刷範囲・印刷項目・改ページ・レイアウトの各コントロールを表示する', () => {
-    const { dialog } = renderCut();
+describe('PrintCutPage', () => {
+  it('印刷範囲・印刷項目・改ページ・レイアウトの各コントロールを表示する', () => {
+    const { page } = renderCut();
 
-    expect(screen.getByText('サークルカット印刷')).toBeInTheDocument();
     for (const label of ['1日目', '2日目', '3日目', '4日目', '抽選漏れ']) {
-      expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+      expect(within(page).getByLabelText(label)).toBeInTheDocument();
     }
-    expect(within(dialog).getByLabelText('東1')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('南4')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('東123')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('色1')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('枠の印刷')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('サークル通し番号の印刷')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('ブロックの全サークルを印刷')).toBeInTheDocument();
+    expect(within(page).getByLabelText('東1')).toBeInTheDocument();
+    expect(within(page).getByLabelText('南4')).toBeInTheDocument();
+    expect(within(page).getByLabelText('東123')).toBeInTheDocument();
+    expect(within(page).getByLabelText('色1')).toBeInTheDocument();
+    expect(within(page).getByLabelText('枠の印刷')).toBeInTheDocument();
+    expect(within(page).getByLabelText('サークル通し番号の印刷')).toBeInTheDocument();
+    expect(within(page).getByLabelText('ブロックの全サークルを印刷')).toBeInTheDocument();
   });
 
   it('グループの寸法は実物の実測どおり (印刷範囲 470x273 / 印刷項目 161x273 / 改ページ 131x213 / レイアウト 213 以上)', () => {
-    const { dialog } = renderCut();
+    const { page } = renderCut();
     const groupOf = (legend: string) =>
-      [...dialog.querySelectorAll('fieldset')].find(
+      [...page.querySelectorAll('fieldset')].find(
         (field) => field.querySelector(':scope > legend')?.textContent === legend,
       ) as HTMLElement;
 
@@ -523,9 +450,9 @@ describe('PrintCutDialog', () => {
   });
 
   it('グループは 印刷範囲 > 日付 > ホール > チェック色、印刷項目、改ページ、レイアウト の順に並ぶ', () => {
-    const { dialog } = renderCut();
+    const { page } = renderCut();
 
-    const legends = [...dialog.querySelectorAll('fieldset > legend')].map(
+    const legends = [...page.querySelectorAll('fieldset > legend')].map(
       (legend) => legend.textContent,
     );
 
@@ -541,25 +468,25 @@ describe('PrintCutDialog', () => {
   });
 
   it('日付のチェックを入れると、他の日付を保ったまま days に足す', async () => {
-    const { user, props, dialog } = renderCut();
+    const { user, props, page } = renderCut();
 
-    await user.click(within(dialog).getByLabelText('1日目'));
+    await user.click(within(page).getByLabelText('1日目'));
 
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, days: [2, 1] } });
   });
 
   it('抽選漏れは 0 として days に入れる', async () => {
-    const { user, props, dialog } = renderCut();
+    const { user, props, page } = renderCut();
 
-    await user.click(within(dialog).getByLabelText('抽選漏れ'));
+    await user.click(within(page).getByLabelText('抽選漏れ'));
 
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, days: [2, 0] } });
   });
 
   it('まとめホール (東123 など) のチェックを入れると halls に足す', async () => {
-    const { user, props, dialog } = renderCut();
+    const { user, props, page } = renderCut();
 
-    await user.click(within(dialog).getByLabelText('東123'));
+    await user.click(within(page).getByLabelText('東123'));
 
     expect(props.onChange).toHaveBeenCalledWith({
       target: { ...TARGET, halls: ['東1', '東123'] },
@@ -567,22 +494,22 @@ describe('PrintCutDialog', () => {
   });
 
   it('チェック色の見本色 (1220-1228) を元の色で表示する', () => {
-    const { dialog } = renderCut();
+    const { page } = renderCut();
 
-    expect(control(dialog, 1220)).toHaveStyle({ backgroundColor: '#ff0000' });
-    expect(control(dialog, 1221)).toHaveStyle({ backgroundColor: '#ff8000' });
-    expect(control(dialog, 1222)).toHaveStyle({ backgroundColor: '#ffff00' });
-    expect(control(dialog, 1223)).toHaveStyle({ backgroundColor: '#008000' });
-    expect(control(dialog, 1224)).toHaveStyle({ backgroundColor: '#00ffff' });
-    expect(control(dialog, 1225)).toHaveStyle({ backgroundColor: '#0000c0' });
-    expect(control(dialog, 1226)).toHaveStyle({ backgroundColor: '#800080' });
-    expect(control(dialog, 1227)).toHaveStyle({ backgroundColor: '#ff00ff' });
-    expect(control(dialog, 1228)).toHaveStyle({ backgroundColor: '#808080' });
+    expect(control(page, 1220)).toHaveStyle({ backgroundColor: '#ff0000' });
+    expect(control(page, 1221)).toHaveStyle({ backgroundColor: '#ff8000' });
+    expect(control(page, 1222)).toHaveStyle({ backgroundColor: '#ffff00' });
+    expect(control(page, 1223)).toHaveStyle({ backgroundColor: '#008000' });
+    expect(control(page, 1224)).toHaveStyle({ backgroundColor: '#00ffff' });
+    expect(control(page, 1225)).toHaveStyle({ backgroundColor: '#0000c0' });
+    expect(control(page, 1226)).toHaveStyle({ backgroundColor: '#800080' });
+    expect(control(page, 1227)).toHaveStyle({ backgroundColor: '#ff00ff' });
+    expect(control(page, 1228)).toHaveStyle({ backgroundColor: '#808080' });
   });
 
   it('印刷順は元実装と同じ 4 項目で、選ぶと pageBreakOrder を変える', async () => {
-    const { user, props, dialog } = renderCut();
-    const order = within(dialog).getByRole('combobox', { name: '印刷順' });
+    const { user, props, page } = renderCut();
+    const order = within(page).getByRole('combobox', { name: '印刷順' });
 
     expect([...order.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
       'チェックリスト順',
@@ -598,26 +525,26 @@ describe('PrintCutDialog', () => {
   });
 
   it('改ページ条件を選ぶと pageBreakBy を変える', async () => {
-    const { user, props, dialog } = renderCut();
+    const { user, props, page } = renderCut();
 
-    await user.click(within(dialog).getByRole('radio', { name: 'ブロック' }));
+    await user.click(within(page).getByRole('radio', { name: 'ブロック' }));
 
     expect(props.onChange).toHaveBeenCalledWith({ pageBreakBy: 'block' });
   });
 
   it('枠の印刷のチェックを外すと printFrame を落とす', async () => {
-    const { user, props, dialog } = renderCut();
+    const { user, props, page } = renderCut();
 
-    expect(within(dialog).getByLabelText('枠の印刷')).toBeChecked();
+    expect(within(page).getByLabelText('枠の印刷')).toBeChecked();
 
-    await user.click(within(dialog).getByLabelText('枠の印刷'));
+    await user.click(within(page).getByLabelText('枠の印刷'));
 
     expect(props.onChange).toHaveBeenCalledWith({ printFrame: false });
   });
 
   it('レイアウトは元実装と同じ 8 種類で、選ぶと layout を変える', async () => {
-    const { user, props, dialog } = renderCut();
-    const layout = within(dialog).getByRole('combobox', { name: 'レイアウト' });
+    const { user, props, page } = renderCut();
+    const layout = within(page).getByRole('combobox', { name: 'レイアウト' });
 
     expect([...layout.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
       '横向き 4 x 4',
@@ -636,9 +563,9 @@ describe('PrintCutDialog', () => {
   });
 
   it('レイアウトの見本枠 (1246) を空の枠として持つ', () => {
-    const { dialog } = renderCut();
+    const { page } = renderCut();
 
-    const frame = within(dialog).getByTestId('print-cut-layout-frame');
+    const frame = within(page).getByTestId('print-cut-layout-frame');
 
     expect(frame).toHaveAttribute('data-ctrl-id', '1246');
     // 元実装はここにレイアウトの見本を実行時描画するため、資源 (ダイアログ 164) では空。
@@ -646,100 +573,75 @@ describe('PrintCutDialog', () => {
   });
 
   it('カット詰め方向は横詰めが既定で、縦詰めを選ぶと cutPacking を変える', async () => {
-    const { user, props, dialog } = renderCut();
+    const { user, props, page } = renderCut();
 
-    expect(within(dialog).getByLabelText('横詰め')).toBeChecked();
-    expect(within(dialog).getByLabelText('縦詰め')).not.toBeChecked();
+    expect(within(page).getByLabelText('横詰め')).toBeChecked();
+    expect(within(page).getByLabelText('縦詰め')).not.toBeChecked();
 
-    await user.click(within(dialog).getByLabelText('縦詰め'));
+    await user.click(within(page).getByLabelText('縦詰め'));
 
     expect(props.onChange).toHaveBeenCalledWith({ cutPacking: 'vertical' });
   });
 
   it('仕様 (UI-SPEC.md ダイアログ 164) の全コントロール ID を data-ctrl-id として持つ', () => {
-    const { dialog } = renderCut();
+    const { page } = renderCut();
 
-    const ids = controlIds(dialog);
-
-    // 仕様の ID がすべて出ていること。
-    expect(ids).toEqual(expect.arrayContaining([...CUT_CONTROL_IDS, CUT_CLOSE_CONTROL_ID]));
-    // 仕様外の ID や同じ ID の重複が無いこと (件数で見る)。
-    expect(ids).toHaveLength(CUT_CONTROL_IDS.length + 1);
-  });
-
-  it('プレビューは現在の設定をそのまま渡す', async () => {
-    const { user, props, dialog } = renderCut();
-
-    await user.click(within(dialog).getByTestId('print-cut-preview'));
-
-    expect(props.onPreview).toHaveBeenCalledTimes(1);
-    expect(props.onPreview).toHaveBeenCalledWith(CUT_SETTINGS);
-  });
-
-  it('プレビュー ボタンは実物の 93x21 (UI-SPEC ダイアログ 164)', () => {
-    const { dialog } = renderCut();
-    const preview = dialog.querySelector('[data-testid="print-cut-preview"]') as HTMLElement;
-    expect(preview.style.width).toBe('93px');
-    expect(preview.style.height).toBe('21px');
-  });
-
-  it('閉じるは onClose を呼ぶ', async () => {
-    const { user, props, dialog } = renderCut();
-
-    await user.click(within(dialog).getByRole('button', { name: '閉じる' }));
-
-    expect(props.onClose).toHaveBeenCalledTimes(1);
-    expect(props.onChange).not.toHaveBeenCalled();
-  });
-});
-
-describe('PrintCutPage', () => {
-  it('Window を出さずにダイアログと同じコントロールを表示する', () => {
-    const { page } = renderCutPage();
     const ids = controlIds(page);
 
-    expect(screen.queryByTestId('print-cut-dialog')).toBeNull();
+    // 仕様の ID がすべて出ていること。
     expect(ids).toEqual(expect.arrayContaining([...CUT_CONTROL_IDS]));
+    // 仕様外の ID や同じ ID の重複が無いこと (件数で見る)。
     expect(ids).toHaveLength(CUT_CONTROL_IDS.length);
-    // 閉じるボタンはダイアログ側が持つ。
-    expect(page.querySelector(`[data-ctrl-id="${CUT_CLOSE_CONTROL_ID}"]`)).toBeNull();
   });
 
   it('プレビューは onPreview を呼ぶ', async () => {
-    const { user, props, page } = renderCutPage();
+    const { user, props, page } = renderCut();
 
     await user.click(within(page).getByTestId('print-cut-preview'));
 
     expect(props.onPreview).toHaveBeenCalledTimes(1);
+  });
+
+  it('プレビュー ボタンは実物の 93x21 (UI-SPEC ダイアログ 164)', () => {
+    const { page } = renderCut();
+    const preview = page.querySelector('[data-testid="print-cut-preview"]') as HTMLElement;
+    expect(preview.style.width).toBe('93px');
+    expect(preview.style.height).toBe('21px');
+  });
+
+  it('Window を出さず、閉じる ボタンも持たない (タブの中身だけを出す)', () => {
+    const { page } = renderCut();
+
+    expect(screen.queryByTestId('print-cut-dialog')).toBeNull();
     expect(within(page).queryByRole('button', { name: '閉じる' })).toBeNull();
+    // 閉じるボタン (元リソース 164 の表には無く、Web 版がダイアログ側で出していた 2) は印刷詳細設定側が持つ。
+    expect(page.querySelector('[data-ctrl-id="2"]')).toBeNull();
   });
 });
 
-describe('PrintMapDialog', () => {
-  it('タイトルとマップ印刷の各コントロールを表示する', () => {
-    const { dialog } = renderMap();
+describe('PrintMapPage', () => {
+  it('マップ印刷の各コントロールを表示する', () => {
+    const { page } = renderMap();
 
-    expect(screen.getByText('マップ印刷')).toBeInTheDocument();
     for (const label of ['1日目', '2日目', '3日目', '4日目', '抽選漏れ']) {
-      expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+      expect(within(page).getByLabelText(label)).toBeInTheDocument();
     }
-    expect(within(dialog).getByLabelText('東1')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('南4')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('東123')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('サークル通し番号の印刷')).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('ジャンルを重ねて印刷')).not.toBeChecked();
-    expect(within(dialog).getByLabelText('略図マップの印刷')).not.toBeChecked();
-    expect(within(dialog).getByTestId('print-map-density')).toHaveValue('50');
-    expect(within(dialog).getByRole('button', { name: 'プレビュー' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: '閉じる' })).toBeInTheDocument();
+    expect(within(page).getByLabelText('東1')).toBeInTheDocument();
+    expect(within(page).getByLabelText('南4')).toBeInTheDocument();
+    expect(within(page).getByLabelText('東123')).toBeInTheDocument();
+    expect(within(page).getByLabelText('サークル通し番号の印刷')).toBeInTheDocument();
+    expect(within(page).getByLabelText('ジャンルを重ねて印刷')).not.toBeChecked();
+    expect(within(page).getByLabelText('略図マップの印刷')).not.toBeChecked();
+    expect(within(page).getByTestId('print-map-density')).toHaveValue('50');
+    expect(within(page).getByRole('button', { name: 'プレビュー' })).toBeInTheDocument();
     // チェック色と指示線の色は 2 か所に並ぶ (165 のチェック色 1330-1338 と指示線 1370-1378)。
-    expect(within(dialog).getAllByLabelText('色1')).toHaveLength(2);
+    expect(within(page).getAllByLabelText('色1')).toHaveLength(2);
   });
 
   it('グループの寸法は実物の実測どおり (印刷範囲 470x273 / 印刷項目 161x273 / 改ページ 131x213 / レイアウト 213 以上)', () => {
-    const { dialog } = renderMap();
+    const { page } = renderMap();
     const groupOf = (legend: string) =>
-      [...dialog.querySelectorAll('fieldset')].find(
+      [...page.querySelectorAll('fieldset')].find(
         (field) => field.querySelector(':scope > legend')?.textContent === legend,
       ) as HTMLElement;
 
@@ -766,13 +668,13 @@ describe('PrintMapDialog', () => {
   });
 
   it('白地図印刷 (166) は 2 列: 左に印刷範囲 + 注記、右にレイアウトのコンボ以下', () => {
-    const { dialog } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
+    const { page } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
 
-    const range = [...dialog.querySelectorAll('fieldset')].find(
+    const range = [...page.querySelectorAll('fieldset')].find(
       (field) => field.querySelector(':scope > legend')?.textContent === '印刷範囲',
     ) as HTMLElement;
-    const note = dialog.querySelector('[data-testid="print-map-blank-note"]') as HTMLElement;
-    const combo = dialog.querySelector('[data-testid="print-map-layout"]') as HTMLElement;
+    const note = page.querySelector('[data-testid="print-map-blank-note"]') as HTMLElement;
+    const combo = page.querySelector('[data-testid="print-map-layout"]') as HTMLElement;
 
     // 166 はチェック色が無いので、印刷範囲は内容幅 (実測 315)。固定幅は付けない。
     expect(range.style.width).toBe('');
@@ -781,20 +683,20 @@ describe('PrintMapDialog', () => {
     expect(note.parentElement).toBe(range.parentElement);
     expect(combo.closest('fieldset')).toBeNull();
     // 見本枠は元リソースの実測 147x117。
-    const frame = dialog.querySelector('[data-testid="print-map-layout-frame"]') as HTMLElement;
+    const frame = page.querySelector('[data-testid="print-map-layout-frame"]') as HTMLElement;
     expect([frame.style.width, frame.style.height]).toEqual(['147px', '117px']);
 
     // 「ジャンルを重ねて印刷」と「濃度」は 1 行に同居する (実物の実測 y=196 が同じ行)。
-    const genre = dialog.querySelector('[data-ctrl-id="1451"]') as HTMLElement;
-    const density = dialog.querySelector('[data-testid="print-map-density"]') as HTMLElement;
+    const genre = page.querySelector('[data-ctrl-id="1451"]') as HTMLElement;
+    const density = page.querySelector('[data-testid="print-map-density"]') as HTMLElement;
     const genreRow = density.parentElement?.parentElement;
     expect(genreRow?.contains(genre)).toBe(true);
     expect(genreRow?.style.flexWrap).toBe('nowrap');
     // 「略図を地図表示に合わせて回転」は 1 段インデント (実測 +18px)。
-    const rotate = dialog.querySelector('[data-ctrl-id="1457"]') as HTMLElement;
+    const rotate = page.querySelector('[data-ctrl-id="1457"]') as HTMLElement;
     expect(rotate.style.marginLeft).toBe('18px');
     // プレビュー ボタンは実物の 93x21 (UI-SPEC ダイアログ 165) で、本文の下端に置く。
-    const preview = dialog.querySelector('[data-testid="print-map-preview"]') as HTMLElement;
+    const preview = page.querySelector('[data-testid="print-map-preview"]') as HTMLElement;
     expect(preview.style.width).toBe('93px');
     expect(preview.style.height).toBe('21px');
     expect((preview.parentElement as HTMLElement).style.marginTop).toBe('auto');
@@ -802,19 +704,19 @@ describe('PrintMapDialog', () => {
   });
 
   it('仕様 (UI-SPEC.md ダイアログ 165) の全コントロール ID を data-ctrl-id として持つ', () => {
-    const { dialog } = renderMap();
+    const { page } = renderMap();
 
-    const ids = controlIds(dialog);
+    const ids = controlIds(page);
 
-    expect(ids).toEqual(expect.arrayContaining([...MAP_CONTROL_IDS, MAP_CLOSE_CONTROL_ID]));
+    expect(ids).toEqual(expect.arrayContaining([...MAP_CONTROL_IDS]));
     // 件数も見て、ID の欠落と重複 (同じ ID を 2 つの要素に付ける) の両方を検出する。
-    expect(ids).toHaveLength(MAP_CONTROL_IDS.length + 1);
+    expect(ids).toHaveLength(MAP_CONTROL_IDS.length);
   });
 
   it('グループは 印刷範囲 > 日付 > ホール > チェック色、印刷項目、改ページ、レイアウト > 指示線 の順に並ぶ', () => {
-    const { dialog } = renderMap();
+    const { page } = renderMap();
 
-    const legends = [...dialog.querySelectorAll('fieldset > legend')].map(
+    const legends = [...page.querySelectorAll('fieldset > legend')].map(
       (legend) => legend.textContent,
     );
 
@@ -831,25 +733,25 @@ describe('PrintMapDialog', () => {
   });
 
   it('日付のチェックを入れると、他の日付を保ったまま days に足す', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByLabelText('1日目'));
+    await user.click(within(page).getByLabelText('1日目'));
 
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, days: [2, 1] } });
   });
 
   it('抽選漏れは 0 として days に入れる', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByLabelText('抽選漏れ'));
+    await user.click(within(page).getByLabelText('抽選漏れ'));
 
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, days: [2, 0] } });
   });
 
   it('まとめホール (東123 など) のチェックを入れると halls に足す', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByLabelText('東123'));
+    await user.click(within(page).getByLabelText('東123'));
 
     expect(props.onChange).toHaveBeenCalledWith({
       target: { ...TARGET, halls: ['東1', '東123'] },
@@ -857,31 +759,31 @@ describe('PrintMapDialog', () => {
   });
 
   it('チェック色のチェックを外すと colors から外す', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByTestId('print-map-color-3'));
+    await user.click(within(page).getByTestId('print-map-color-3'));
 
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, colors: [] } });
   });
 
   it('チェック色の見本色 (1320-1328) を元の色で表示する', () => {
-    const { dialog } = renderMap();
+    const { page } = renderMap();
 
-    expect(control(dialog, 1320)).toHaveStyle({ backgroundColor: '#ff0000' });
-    expect(control(dialog, 1321)).toHaveStyle({ backgroundColor: '#ff8000' });
-    expect(control(dialog, 1322)).toHaveStyle({ backgroundColor: '#ffff00' });
-    expect(control(dialog, 1323)).toHaveStyle({ backgroundColor: '#008000' });
-    expect(control(dialog, 1324)).toHaveStyle({ backgroundColor: '#00ffff' });
-    expect(control(dialog, 1325)).toHaveStyle({ backgroundColor: '#0000c0' });
-    expect(control(dialog, 1326)).toHaveStyle({ backgroundColor: '#800080' });
-    expect(control(dialog, 1327)).toHaveStyle({ backgroundColor: '#ff00ff' });
-    expect(control(dialog, 1328)).toHaveStyle({ backgroundColor: '#808080' });
+    expect(control(page, 1320)).toHaveStyle({ backgroundColor: '#ff0000' });
+    expect(control(page, 1321)).toHaveStyle({ backgroundColor: '#ff8000' });
+    expect(control(page, 1322)).toHaveStyle({ backgroundColor: '#ffff00' });
+    expect(control(page, 1323)).toHaveStyle({ backgroundColor: '#008000' });
+    expect(control(page, 1324)).toHaveStyle({ backgroundColor: '#00ffff' });
+    expect(control(page, 1325)).toHaveStyle({ backgroundColor: '#0000c0' });
+    expect(control(page, 1326)).toHaveStyle({ backgroundColor: '#800080' });
+    expect(control(page, 1327)).toHaveStyle({ backgroundColor: '#ff00ff' });
+    expect(control(page, 1328)).toHaveStyle({ backgroundColor: '#808080' });
   });
 
   it('印刷項目のチェックを外すと items から外す', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByLabelText('サークル名'));
+    await user.click(within(page).getByLabelText('サークル名'));
 
     expect(props.onChange).toHaveBeenCalledWith({
       items: ['読み', '執筆者', '発行誌', '位置', '日付', 'ジャンル'],
@@ -889,20 +791,20 @@ describe('PrintMapDialog', () => {
   });
 
   it('補足を拡大 / メモを拡大で enlargeDescription と enlargeMemo を立てる', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByLabelText('補足を拡大'));
+    await user.click(within(page).getByLabelText('補足を拡大'));
     expect(props.onChange).toHaveBeenCalledWith({ enlargeDescription: true });
 
-    await user.click(within(dialog).getByLabelText('メモを拡大'));
+    await user.click(within(page).getByLabelText('メモを拡大'));
     expect(props.onChange).toHaveBeenLastCalledWith({ enlargeMemo: true });
   });
 
   it('印刷順は元実装と同じ 5 項目で、選ぶと pageBreakOrder を変える', async () => {
-    const { user, props, dialog } = renderMap();
-    const order = within(dialog).getByRole('combobox', { name: '印刷順' });
+    const { user, props, page } = renderMap();
+    const order = within(page).getByRole('combobox', { name: '印刷順' });
 
-    expect(order).toBe(control(dialog, 1339));
+    expect(order).toBe(control(page, 1339));
     expect([...order.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
       'チェックリスト順',
       '配置順',
@@ -918,18 +820,18 @@ describe('PrintMapDialog', () => {
   });
 
   it('改ページ条件を選ぶと pageBreakBy を変える', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByRole('radio', { name: 'ブロック' }));
+    await user.click(within(page).getByRole('radio', { name: 'ブロック' }));
 
     expect(props.onChange).toHaveBeenCalledWith({ pageBreakBy: 'block' });
   });
 
   it('レイアウトは元実装と同じ 10 タイプで、選ぶと layout を変える', async () => {
-    const { user, props, dialog } = renderMap();
-    const layout = within(dialog).getByRole('combobox', { name: 'レイアウト' });
+    const { user, props, page } = renderMap();
+    const layout = within(page).getByRole('combobox', { name: 'レイアウト' });
 
-    expect(layout).toBe(control(dialog, 1345));
+    expect(layout).toBe(control(page, 1345));
     expect([...layout.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
       '横向き地図＋チェック色',
       '横向き地図＋リスト',
@@ -944,8 +846,8 @@ describe('PrintMapDialog', () => {
     ]);
     expect(layout).toHaveValue('landscapeColor');
     // 1346 はレイアウトの見本を描く枠。資源では空で、Web 版も空のまま出す。
-    expect(control(dialog, 1346)).toBeEmptyDOMElement();
-    expect(within(dialog).getByTestId('print-map-layout-frame')).toBeEmptyDOMElement();
+    expect(control(page, 1346)).toBeEmptyDOMElement();
+    expect(within(page).getByTestId('print-map-layout-frame')).toBeEmptyDOMElement();
 
     await user.selectOptions(
       layout,
@@ -956,27 +858,27 @@ describe('PrintMapDialog', () => {
   });
 
   it('サークル通し番号 / チェック色一覧のチェックを立てる', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByLabelText('サークル通し番号の印刷'));
+    await user.click(within(page).getByLabelText('サークル通し番号の印刷'));
     expect(props.onChange).toHaveBeenCalledWith({ printSequenceNumber: true });
 
-    await user.click(within(dialog).getByLabelText('チェック色一覧の印刷'));
+    await user.click(within(page).getByLabelText('チェック色一覧の印刷'));
     expect(props.onChange).toHaveBeenLastCalledWith({ printColorLegend: true });
   });
 
   it('ジャンルを重ねて印刷のチェックを入れると overlayGenre を立てる', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByLabelText('ジャンルを重ねて印刷'));
+    await user.click(within(page).getByLabelText('ジャンルを重ねて印刷'));
 
     expect(props.onChange).toHaveBeenCalledWith({ overlayGenre: true });
   });
 
   it('濃度を変えると overlayDensity を更新する', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    const input = within(dialog).getByTestId('print-map-density');
+    const input = within(page).getByTestId('print-map-density');
     await user.clear(input);
     await user.type(input, '30');
 
@@ -984,20 +886,20 @@ describe('PrintMapDialog', () => {
   });
 
   it('略図マップの印刷 / 略図を地図表示に合わせて回転のチェックを立てる', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByLabelText('略図マップの印刷'));
+    await user.click(within(page).getByLabelText('略図マップの印刷'));
     expect(props.onChange).toHaveBeenCalledWith({ printSketchMap: true });
 
-    await user.click(within(dialog).getByLabelText('略図を地図表示に合わせて回転'));
+    await user.click(within(page).getByLabelText('略図を地図表示に合わせて回転'));
     expect(props.onChange).toHaveBeenLastCalledWith({ rotateSketchMap: true });
   });
 
   it('地図詰めの方向は元実装と同じ 5 項目で、選ぶと mapPacking を変える', async () => {
-    const { user, props, dialog } = renderMap();
-    const packing = within(dialog).getByRole('combobox', { name: '地図詰めの方向' });
+    const { user, props, page } = renderMap();
+    const packing = within(page).getByRole('combobox', { name: '地図詰めの方向' });
 
-    expect(packing).toBe(control(dialog, 1359));
+    expect(packing).toBe(control(page, 1359));
     expect([...packing.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
       '左下',
       '右下',
@@ -1013,10 +915,10 @@ describe('PrintMapDialog', () => {
   });
 
   it('指示線の太さは元実装と同じ 4 項目で、選ぶと indicatorWidth を変える', async () => {
-    const { user, props, dialog } = renderMap();
-    const width = within(dialog).getByRole('combobox', { name: '指示線の太さ' });
+    const { user, props, page } = renderMap();
+    const width = within(page).getByRole('combobox', { name: '指示線の太さ' });
 
-    expect(width).toBe(control(dialog, 1351));
+    expect(width).toBe(control(page, 1351));
     expect([...width.querySelectorAll('option')].map((option) => option.textContent)).toEqual([
       'なし',
       '細',
@@ -1031,69 +933,55 @@ describe('PrintMapDialog', () => {
   });
 
   it('指示線の色のチェックを外すと indicatorColors から外す', async () => {
-    const { user, props, dialog } = renderMap();
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByTestId('print-map-indicator-3'));
+    await user.click(within(page).getByTestId('print-map-indicator-3'));
 
     expect(props.onChange).toHaveBeenCalledWith({ indicatorColors: [1, 2, 4, 5, 6, 7, 8, 9] });
   });
 
   it('指示線の見本色 (1360-1368) を元の色で表示する', () => {
-    const { dialog } = renderMap();
+    const { page } = renderMap();
 
-    expect(control(dialog, 1360)).toHaveStyle({ backgroundColor: '#ff0000' });
-    expect(control(dialog, 1361)).toHaveStyle({ backgroundColor: '#ff8000' });
-    expect(control(dialog, 1362)).toHaveStyle({ backgroundColor: '#ffff00' });
-    expect(control(dialog, 1363)).toHaveStyle({ backgroundColor: '#008000' });
-    expect(control(dialog, 1364)).toHaveStyle({ backgroundColor: '#00ffff' });
-    expect(control(dialog, 1365)).toHaveStyle({ backgroundColor: '#0000c0' });
-    expect(control(dialog, 1366)).toHaveStyle({ backgroundColor: '#800080' });
-    expect(control(dialog, 1367)).toHaveStyle({ backgroundColor: '#ff00ff' });
-    expect(control(dialog, 1368)).toHaveStyle({ backgroundColor: '#808080' });
+    expect(control(page, 1360)).toHaveStyle({ backgroundColor: '#ff0000' });
+    expect(control(page, 1361)).toHaveStyle({ backgroundColor: '#ff8000' });
+    expect(control(page, 1362)).toHaveStyle({ backgroundColor: '#ffff00' });
+    expect(control(page, 1363)).toHaveStyle({ backgroundColor: '#008000' });
+    expect(control(page, 1364)).toHaveStyle({ backgroundColor: '#00ffff' });
+    expect(control(page, 1365)).toHaveStyle({ backgroundColor: '#0000c0' });
+    expect(control(page, 1366)).toHaveStyle({ backgroundColor: '#800080' });
+    expect(control(page, 1367)).toHaveStyle({ backgroundColor: '#ff00ff' });
+    expect(control(page, 1368)).toHaveStyle({ backgroundColor: '#808080' });
   });
 
-  it('プレビューは現在の設定をそのまま渡す', async () => {
-    const { user, props, dialog } = renderMap();
+  it('プレビューは onPreview を呼ぶ', async () => {
+    const { user, props, page } = renderMap();
 
-    await user.click(within(dialog).getByTestId('print-map-preview'));
+    await user.click(within(page).getByTestId('print-map-preview'));
 
-    expect(within(dialog).getByTestId('print-map-preview')).toBe(control(dialog, 1347));
+    expect(within(page).getByTestId('print-map-preview')).toBe(control(page, 1347));
     expect(props.onPreview).toHaveBeenCalledTimes(1);
-    expect(props.onPreview).toHaveBeenCalledWith(MAP_SETTINGS);
-    expect(props.onClose).not.toHaveBeenCalled();
   });
 
-  it('閉じるは onClose を呼び、設定は変えない', async () => {
-    const { user, props, dialog } = renderMap();
+  it('blank のときは白地図の注記を出す', () => {
+    const { page } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
 
-    await user.click(within(dialog).getByRole('button', { name: '閉じる' }));
-
-    expect(props.onClose).toHaveBeenCalledTimes(1);
-    expect(props.onChange).not.toHaveBeenCalled();
-    expect(props.onPreview).not.toHaveBeenCalled();
-  });
-
-  it('blank のときは白地図印刷のタイトルと注記を出す', () => {
-    const { dialog } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
-
-    expect(screen.getByText('白地図印刷')).toBeInTheDocument();
-    expect(screen.queryByText('マップ印刷')).not.toBeInTheDocument();
-    expect(within(dialog).getByTestId('print-map-blank-note')).toBeInTheDocument();
+    expect(within(page).getByTestId('print-map-blank-note')).toBeInTheDocument();
   });
 
   it('blank でないときは白地図の注記を出さない', () => {
-    const { dialog } = renderMap();
+    const { page } = renderMap();
 
-    expect(within(dialog).queryByTestId('print-map-blank-note')).not.toBeInTheDocument();
+    expect(within(page).queryByTestId('print-map-blank-note')).not.toBeInTheDocument();
   });
 
   it('blank のときは 166 の全コントロール ID を出し、165 固有の行を出さない', () => {
-    const { dialog } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
+    const { page } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
 
-    const ids = controlIds(dialog);
+    const ids = controlIds(page);
 
-    expect(ids).toEqual(expect.arrayContaining([...BLANK_MAP_CONTROL_IDS, MAP_CLOSE_CONTROL_ID]));
-    expect(ids).toHaveLength(BLANK_MAP_CONTROL_IDS.length + 1);
+    expect(ids).toEqual(expect.arrayContaining([...BLANK_MAP_CONTROL_IDS]));
+    expect(ids).toHaveLength(BLANK_MAP_CONTROL_IDS.length);
     // 165 固有: チェック色 (1330) / 印刷項目 (1344) / 改ページ (1340) / 指示線 (1351, 1370)。
     expect(ids).not.toContain(1330);
     expect(ids).not.toContain(1344);
@@ -1103,72 +991,51 @@ describe('PrintMapDialog', () => {
   });
 
   it('blank のときのグループは 印刷範囲 > 日付 > ホール だけになる (166 にレイアウトの枠は無い)', () => {
-    const { dialog } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
+    const { page } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
 
-    const legends = [...dialog.querySelectorAll('fieldset > legend')].map(
+    const legends = [...page.querySelectorAll('fieldset > legend')].map(
       (legend) => legend.textContent,
     );
 
     expect(legends).toEqual(['印刷範囲', '日付', 'ホール']);
     // 1446 は 165 の 1346 と同じレイアウトの見本枠。
-    expect(control(dialog, 1446)).toBeEmptyDOMElement();
-    expect(within(dialog).getByTestId('print-map-layout-frame')).toBeEmptyDOMElement();
+    expect(control(page, 1446)).toBeEmptyDOMElement();
+    expect(within(page).getByTestId('print-map-layout-frame')).toBeEmptyDOMElement();
   });
 
-  it('blank のときのプレビューは 1447 で、白地図の設定をそのまま渡す', async () => {
-    const blankSettings: PrintMapSettings = { ...MAP_SETTINGS, blank: true };
-    const { user, props, dialog } = renderMap({ settings: blankSettings });
+  it('blank のときのプレビューは 1447', async () => {
+    const { user, props, page } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
 
-    const preview = within(dialog).getByTestId('print-map-preview');
-    expect(preview).toBe(control(dialog, 1447));
+    const preview = within(page).getByTestId('print-map-preview');
+    expect(preview).toBe(control(page, 1447));
 
     await user.click(preview);
 
-    expect(props.onPreview).toHaveBeenCalledWith(blankSettings);
+    expect(props.onPreview).toHaveBeenCalledTimes(1);
   });
 
   it('blank のときも日付とホール、レイアウト系の設定を変えられる', async () => {
-    const { user, props, dialog } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
+    const { user, props, page } = renderMap({ settings: { ...MAP_SETTINGS, blank: true } });
 
-    await user.click(within(dialog).getByLabelText('1日目'));
+    await user.click(within(page).getByLabelText('1日目'));
     expect(props.onChange).toHaveBeenCalledWith({ target: { ...TARGET, days: [2, 1] } });
 
-    await user.click(within(dialog).getByLabelText('東123'));
+    await user.click(within(page).getByLabelText('東123'));
     expect(props.onChange).toHaveBeenLastCalledWith({
       target: { ...TARGET, halls: ['東1', '東123'] },
     });
 
-    await user.click(within(dialog).getByLabelText('略図を地図表示に合わせて回転'));
+    await user.click(within(page).getByLabelText('略図を地図表示に合わせて回転'));
     expect(props.onChange).toHaveBeenLastCalledWith({ rotateSketchMap: true });
   });
-});
 
-describe('PrintMapPage', () => {
-  it('Window を出さずにダイアログと同じコントロールを表示する', () => {
-    const { page } = renderMapPage();
-    const ids = controlIds(page);
+  it('Window を出さず、閉じる ボタンも持たない (タブの中身だけを出す)', () => {
+    const { page } = renderMap();
 
     expect(screen.queryByTestId('print-map-dialog')).toBeNull();
-    expect(ids).toEqual(expect.arrayContaining([...MAP_CONTROL_IDS]));
-    expect(ids).toHaveLength(MAP_CONTROL_IDS.length);
-    // 閉じるボタンはダイアログ側が持つ。
-    expect(page.querySelector(`[data-ctrl-id="${MAP_CLOSE_CONTROL_ID}"]`)).toBeNull();
-  });
-
-  it('blank のときは 166 の見た目になる', () => {
-    const { page } = renderMapPage(true);
-
-    expect(controlIds(page)).toEqual(expect.arrayContaining([...BLANK_MAP_CONTROL_IDS]));
-    expect(within(page).getByTestId('print-map-blank-note')).toBeInTheDocument();
-  });
-
-  it('プレビューは onPreview を呼ぶ', async () => {
-    const { user, props, page } = renderMapPage();
-
-    await user.click(within(page).getByTestId('print-map-preview'));
-
-    expect(props.onPreview).toHaveBeenCalledTimes(1);
     expect(within(page).queryByRole('button', { name: '閉じる' })).toBeNull();
+    // 閉じるボタン (元リソース 165 / 166 の表には無く、Web 版がダイアログ側で出していた 2) は印刷詳細設定側が持つ。
+    expect(page.querySelector('[data-ctrl-id="2"]')).toBeNull();
   });
 });
 

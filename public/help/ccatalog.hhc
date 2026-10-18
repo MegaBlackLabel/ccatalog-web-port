@@ -1,0 +1,182 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<HTML>
+<HEAD>
+<meta name="GENERATOR" content="Microsoft&reg; HTML Help Workshop 4.1">
+<!-- Sitemap 1.0 -->
+</HEAD><BODY>
+<OBJECT type="text/site properties">
+	<param name="ImageType" value="Folder">
+</OBJECT>
+<UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="はじめに">
+		<param name="Local" value="0BASE/1OVERVIE.HTM">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="インストール">
+		<param name="Local" value="0BASE/2INSTALL.HTM">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="アンインストール">
+		<param name="Local" value="0BASE/3UNINSTA.HTM">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="旧版からの変更点">
+		<param name="Local" value="0BASE/4CHANGE.HTM">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="サポート">
+		<param name="Local" value="0BASE/9SUPPORT.HTM">
+		</OBJECT>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="ウィンドウ">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="ウィンドウ">
+			<param name="Local" value="1WINDOW/1WINDOW.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="サークルカットウィンドウ">
+			<param name="Local" value="1WINDOW/2CIRCLE.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="チェックリストウィンドウ">
+			<param name="Local" value="1WINDOW/3CHECK.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="サークル詳細ウィンドウ">
+			<param name="Local" value="1WINDOW/4DETAIL.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="会場マップウィンドウ">
+			<param name="Local" value="1WINDOW/5MAP.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="サークル一覧ウィンドウ">
+			<param name="Local" value="1WINDOW/6LIST.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="メインメニュー">
+			<param name="Local" value="1WINDOW/7MENU.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="メインウィンドウツールバー">
+			<param name="Local" value="1WINDOW/8TOOLBAR.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="コンテキストメニュー">
+			<param name="Local" value="1WINDOW/9CONTEXT.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="読み込みサークルの確認">
+			<param name="Local" value="1WINDOW/10CREAD.HTM">
+			</OBJECT>
+	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="ブックマーク">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="ブックマーク">
+			<param name="Local" value="2BOOKMRK/1BOOKMAR.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="ブックマークの整理">
+			<param name="Local" value="2BOOKMRK/2CONF.HTM">
+			</OBJECT>
+	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="検索">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="サークル検索">
+			<param name="Local" value="3SEARCH/1SEARCH.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="絞込み検索">
+			<param name="Local" value="3SEARCH/2CONTSRC.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Googleでのサークル検索">
+			<param name="Local" value="3SEARCH/3GGLSRCH.HTM">
+			</OBJECT>
+	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="印刷">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="印刷">
+			<param name="Local" value="4PRINT/1PRINT.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="サークルリスト印刷">
+			<param name="Local" value="4PRINT/2LIST.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="サークルカット印刷">
+			<param name="Local" value="4PRINT/3CUT.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="マップ印刷">
+			<param name="Local" value="4PRINT/4MAP.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="白地図印刷">
+			<param name="Local" value="4PRINT/4WMAP.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="印刷プレビュー">
+			<param name="Local" value="4PRINT/5PREVIEW.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="印刷が遅い場合は">
+			<param name="Local" value="PRNSPOOL/SPOOLTIP.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="高解像度印刷の注意点">
+			<param name="Local" value="PRNSPOOL/HIRESOTP.HTM">
+			</OBJECT>
+	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="動作設定">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="動作設定">
+			<param name="Local" value="5CONFIG/1CONFIG.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="動作オプション">
+			<param name="Local" value="5CONFIG/2OPTION.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="画像データパス">
+			<param name="Local" value="5CONFIG/3IMGPATH.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="リスト表示設定">
+			<param name="Local" value="5CONFIG/5LIST.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="色の設定">
+			<param name="Local" value="5CONFIG/4COLORS.HTM">
+			</OBJECT>
+	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="データの追加・削除">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="サークルデータの追加と削除">
+			<param name="Local" value="6DATA/1DATA.HTM">
+			</OBJECT>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="画像データの追加と削除">
+			<param name="Local" value="6DATA/2IMAGE.HTM">
+			</OBJECT>
+	</UL>
+</UL>
+</BODY></HTML>
