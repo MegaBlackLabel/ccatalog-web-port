@@ -13,6 +13,11 @@ export type CircleCutViewProps = {
    * アプリがページの先頭 / 末尾のサークルから組み立てて渡す。空なら帯を出さない。
    */
   heading?: string;
+  /**
+   * 配置情報の帯の寄せ。奇数ページは右寄せ、偶数ページは左寄せ (既定) にする。
+   * 帯の白はカット格子と同じ幅のままで、寄せるのは中身の文字だけ。
+   */
+  headingAlign?: 'left' | 'right';
   selectedId: number | null;
   /** チェック済みサークルの ID。 */
   checkedIds: ReadonlySet<number>;
@@ -183,6 +188,7 @@ const IMAGE_STYLE: CSSProperties = {
 export function CircleCutView({
   circles,
   heading = '',
+  headingAlign = 'left',
   selectedId,
   checkedIds,
   colorById,
@@ -311,6 +317,8 @@ export function CircleCutView({
             // 拡大率を指定していても文字の幅で途切れさせない。
             width: fixedCellWidth === null ? '100%' : gridWidth,
             maxWidth: gridWidth,
+            // 奇数ページは右寄せ、偶数ページは左寄せ (寄せるのは中身の文字だけ)。
+            justifyContent: headingAlign === 'right' ? 'flex-end' : 'flex-start',
           }}
         >
           {heading}

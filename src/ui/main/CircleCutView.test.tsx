@@ -307,3 +307,33 @@ describe('CircleCutView — 掴みスクロール (動作設定 1023 Adobe / 102
     expect(view.scrollLeft).toBe(60);
   });
 });
+
+describe('CircleCutView — 配置情報の帯の寄せ (奇数ページは右 / 偶数ページは左)', () => {
+  /** 帯だけを見る (格子の計測は要らないので 1 枚だけ描く)。 */
+  function renderBand(headingAlign: 'left' | 'right') {
+    render(
+      <CircleCutView
+        circles={[makeCircle(1)]}
+        heading="9日（金）西2 け1〜け15"
+        headingAlign={headingAlign}
+        selectedId={null}
+        checkedIds={new Set<number>()}
+        onSelect={vi.fn()}
+        onOpenDetail={vi.fn()}
+      />,
+    );
+    return screen.getByTestId('cut-heading');
+  }
+
+  it('右寄せ (奇数ページ) は帯の中身を右端に寄せる', () => {
+    const band = renderBand('right');
+
+    expect(band.style.justifyContent).toBe('flex-end');
+    // 帯の白はカット格子と同じ幅のまま (寄せるのは中身の文字だけ)。
+    expect(band.style.width).toBe('100%');
+  });
+
+  it('左寄せ (偶数ページ) は帯の中身を左端に寄せる', () => {
+    expect(renderBand('left').style.justifyContent).toBe('flex-start');
+  });
+});

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CCATALOG_MENUS } from '../menu/menu-defs';
 import { CHECK_COLOR_HEX, CHECK_COLOR_IDS, checkSwatchIcon } from '../check-colors';
@@ -655,5 +655,79 @@ describe('CircleCutView', () => {
 
     await user.click(screen.getByTestId('cut-view'));
     expect(onSelect).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('MainWindow — チェックリスト メニュー (実機の並びと活性)', () => {
+  /** チェックリスト メニューを開き、出ている項目 (区切りを除く) を返す。 */
+  async function openChecklistMenu(user: UserEvent, main: HTMLElement) {
+    await user.click(
+      within(main).getByRole('menuitem', { name: 'チェックリスト(A)' }),
+    );
+    const opened = screen.getAllByRole('menu');
+    return within(opened[opened.length - 1]).getAllByRole('menuitem');
+  }
+
+  /** 項目の表示文字 (ラベル + ショートカット)。 */
+  const textOf = (item: HTMLElement) => (item.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  it('サークルカット未選択では選択が要る項目だけ使えない', async () => {
+    const { user, main } = renderMain();
+    const items = await openChecklistMenu(user, main);
+    const item = (label: string) =>
+      items.find((node) => textOf(node).startsWith(label)) as HTMLElement;
+
+    // 選択中のサークルに効く項目 (追加 / 外す / メモ編集 / コピー)。
+    for (const label of [
+      '標準色で追加(A)',
+      '色1で追加',
+      '色9で追加',
+      'チェックリストから外す(R)',
+      'サークルのメモを編集する(M)',
+      '選択サークルをクリップボードにコピー(C)',
+    ]) {
+      expect(item(label), label).toHaveAttribute('aria-disabled', 'true');
+    }
+    // 選択に関係なく使える項目 (標準のチェック色 / 色の編集 / メモの一括消去 / ペースト)。
+    for (const label of [
+      '標準のチェック色(D)',
+      'チェック色の編集(E)...',
+      'チェックなしサークルのメモを消去する',
+      '全てのメモを消去する',
+      'クリップボードからチェックリストにペースト(P)',
+    ]) {
+      expect(item(label).getAttribute('aria-disabled'), label).not.toBe('true');
+    }
+  });
+
+  it('サークルカットを選択中は選択が要る項目も使える', async () => {
+    const { user, main } = renderMain({ selectedId: 1 });
+    const items = await openChecklistMenu(user, main);
+
+    for (const label of [
+      '標準色で追加(A)',
+      '色1で追加',
+      'チェックリストから外す(R)',
+      'サークルのメモを編集する(M)',
+      '選択サークルをクリップボードにコピー(C)',
+    ]) {
+      const item = items.find((node) => textOf(node).startsWith(label)) as HTMLElement;
+      expect(item.getAttribute('aria-disabled'), label).not.toBe('true');
+    }
+  });
+
+  it('項目は元実装のコマンドを送る (標準色で追加 33040 / 色1で追加 33001 / 外す 33020)', async () => {
+    const { user, main, props } = renderMain({ selectedId: 1 });
+
+    for (const [label, command] of [
+      ['標準色で追加(A)', 33040],
+      ['色1で追加', 33001],
+      ['チェックリストから外す(R)', 33020],
+    ] as const) {
+      // 項目を選ぶとメニューが閉じるので、毎回開き直す。
+      const items = await openChecklistMenu(user, main);
+      await user.click(items.find((node) => textOf(node).startsWith(label)) as HTMLElement);
+      expect(props.onCommand, label).toHaveBeenLastCalledWith(command);
+    }
   });
 });

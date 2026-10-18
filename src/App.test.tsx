@@ -6,7 +6,7 @@ import dummy from './data/fixtures/dummy-catalog.json';
 import { DEFAULT_SEARCH_CONDITION, searchCircles } from './domain/search';
 import { SEARCH_FIELDS } from './domain/search-fields';
 import type { CatalogData } from './domain/types';
-import { CHECK_COLOR_HEX } from './ui/check-colors';
+import { CHECK_COLOR_HEX, STANDARD_CHECK_COLOR_HEX } from './ui/check-colors';
 
 /** 同梱のダミーカタログの件数 (生成: tools/gen-dummy-data.py)。 */
 const SAMPLE_COUNT = dummy.circles.length;
@@ -35,6 +35,34 @@ function checkedCount(): number {
 /** ステータスバーのページ番号欄の値 (実物のステータスバーは通常は空なので番号欄で確認する)。 */
 function pageNumberOf(): string {
   return (screen.getByRole('textbox', { name: 'ページ番号' }) as HTMLInputElement).value;
+}
+
+/** サークル詳細ウィンドウの「サークル名」行の値 (実物は読み取り専用テキスト)。 */
+function detailCircleName(): string {
+  const row = within(screen.getByTestId('detail-window'))
+    .queryAllByTestId('detail-info-row')
+    .find((node) => node.getAttribute('data-label') === 'サークル名');
+  return row?.lastElementChild?.textContent ?? '';
+}
+
+/** ページ指定で移動する (メニュー ページ移動(J) → ページ指定で移動)。 */
+async function gotoPage(user: UserEvent, pageNo: number) {
+  await chooseMenu(user, 'ページ移動(J)', /^ページ指定で移動/);
+  const input = await screen.findByTestId('goto-page-input');
+  await user.clear(input);
+  await user.type(input, String(pageNo));
+  await user.click(screen.getByTestId('goto-page-submit'));
+  await waitFor(() => expect(pageNumberOf()).toBe(String(pageNo)));
+}
+
+/** チェックリスト メニューを開き、出ている項目 (区切りを除く) を並び順で返す。 */
+async function openChecklistMenu(user: UserEvent): Promise<HTMLElement[]> {
+  const menus = screen.getAllByRole('menubar');
+  await user.click(
+    within(menus[menus.length - 1]).getByRole('menuitem', { name: 'チェックリスト(A)' }),
+  );
+  const opened = screen.getAllByRole('menu');
+  return within(opened[opened.length - 1]).getAllByRole('menuitem');
 }
 
 async function renderApp() {
@@ -218,12 +246,69 @@ describe('App — サークルを選ぶ', () => {
   it('ページ指定で移動するとカット表示のページが変わる', async () => {
     const { user } = await renderApp();
     const lastPage = dummy.circles[dummy.circles.length - 1].pageNo;
-    await chooseMenu(user, 'ページ移動(J)', /^ページ指定で移動/);
-    const input = await screen.findByTestId('goto-page-input');
-    await user.clear(input);
-    await user.type(input, String(lastPage));
-    await user.click(screen.getByTestId('goto-page-submit'));
-    await waitFor(() => expect(pageNumberOf()).toBe(String(lastPage)));
+    await gotoPage(user, lastPage);
+  });
+
+  it('カット以外をクリックすると選択が外れ、先頭のサークルを選び直さない (実機と同じ未選択)', async () => {
+    const { user } = await renderApp();
+    const view = await screen.findByTestId('cut-view');
+    // 起動直後は先頭のサークルにカーソルがある (カットビューが空のまま開くことはない)。
+    await waitFor(() => expect(view.querySelectorAll('.cut-cell--selected')).toHaveLength(1));
+
+    // 別のページへ移って 1 つ選び、カット以外 (背景) をクリックする。
+    await gotoPage(user, 106);
+    await user.click(screen.getByTestId('cut-view').querySelector('.cut-cell') as HTMLElement);
+    await user.click(screen.getByTestId('cut-view'));
+
+    // 実機と同じく未選択のまま (先頭を選び直さないのでページも動かない)。
+    expect(screen.getByTestId('cut-view').querySelectorAll('.cut-cell--selected')).toHaveLength(0);
+    expect(pageNumberOf()).toBe('106');
+
+    // 未選択では、選択が要るチェックリスト メニューの項目が使えない。
+    const items = await openChecklistMenu(user);
+    const textOf = (item: HTMLElement) => (item.textContent ?? '').replace(/\s+/g, ' ').trim();
+    for (const label of ['標準色で追加(A)', '色1で追加', 'チェックリストから外す(R)']) {
+      const item = items.find((node) => textOf(node).startsWith(label)) as HTMLElement;
+      expect(item.getAttribute('aria-disabled'), label).toBe('true');
+    }
+  }, 30000);
+
+  it('カットの選択が外れても、サークル詳細には直前まで選んでいたサークルが残る', async () => {
+    const { user } = await renderApp();
+    // 別のページへ移って 1 つ選ぶ (詳細のサークル名がそのカットのものになる)。
+    await gotoPage(user, 106);
+    await user.click(screen.getByTestId('cut-view').querySelector('.cut-cell') as HTMLElement);
+    const name = detailCircleName();
+    expect(name.length).toBeGreaterThan(0);
+
+    // カット以外をクリックして選択を外す。
+    await user.click(screen.getByTestId('cut-view'));
+
+    expect(screen.getByTestId('cut-view').querySelectorAll('.cut-cell--selected')).toHaveLength(0);
+    // 詳細は直前のサークルのまま (カット未選択の表示には戻らない)。
+    const detail = screen.getByTestId('detail-window');
+    expect(detailCircleName()).toBe(name);
+    expect(within(detail).queryByTestId('detail-cut-placeholder')).toBeNull();
+  }, 30000);
+});
+
+describe('App — サークルカットの配置情報の帯 (トップ)', () => {
+  it('日付と曜日の後ろに空白を入れない (実物の「9日（金）西2 け1〜け15」)', async () => {
+    const { user } = await renderApp();
+    await gotoPage(user, 105);
+
+    // 実物は「（金）」と会場の間に空白が無い。会場と範囲の間だけ空白を残す。
+    expect((await screen.findByTestId('cut-heading')).textContent).toBe('9日（金）西2 け1〜け15');
+  });
+
+  it('帯は奇数ページは右寄せ、偶数ページは左寄せにする', async () => {
+    const { user } = await renderApp();
+
+    await gotoPage(user, 105);
+    expect((await screen.findByTestId('cut-heading')).style.justifyContent).toBe('flex-end');
+
+    await gotoPage(user, 106);
+    expect(screen.getByTestId('cut-heading').style.justifyContent).toBe('flex-start');
   });
 });
 
@@ -1213,6 +1298,83 @@ describe('App — メニューの残り (ファイル / 表示 / ページ移動
     );
     expect(within(main).getByTestId('toolbar-group-jump')).toBeInTheDocument();
   });
+});
+
+describe('App — チェックリスト メニュー (実機の並びと活性)', () => {
+  /** 項目の表示文字 (ラベル + ショートカット)。 */
+  const textOf = (item: HTMLElement) => (item.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  /** 未チェックの a のサークル (番号ボックスを持ち、まだチェックされていないセル) を選ぶ。 */
+  async function selectUncheckedCircle(user: UserEvent): Promise<HTMLElement> {
+    const cell = [...screen.getByTestId('cut-view').querySelectorAll('.cut-cell')].find(
+      (node) => node.querySelector('.cut-cell__space') && !node.classList.contains('cut-cell--checked'),
+    ) as HTMLElement;
+    await user.click(cell);
+    return cell;
+  }
+
+  it('実機 (画像) と同じ並びで、色1〜色9には 1〜9 のショートカットが付く', async () => {
+    const { user } = await renderApp();
+    const items = await openChecklistMenu(user);
+
+    expect(items.map(textOf)).toEqual([
+      '標準色で追加(A)Enter',
+      '色1で追加1',
+      '色2で追加2',
+      '色3で追加3',
+      '色4で追加4',
+      '色5で追加5',
+      '色6で追加6',
+      '色7で追加7',
+      '色8で追加8',
+      '色9で追加9',
+      'チェックリストから外す(R)0',
+      '標準のチェック色(D)▶',
+      'チェック色の編集(E)...',
+      'サークルのメモを編集する(M)Ctrl+T',
+      'チェックなしサークルのメモを消去する',
+      '全てのメモを消去する',
+      '選択サークルをクリップボードにコピー(C)',
+      'クリップボードからチェックリストにペースト(P)',
+    ]);
+  });
+
+  it('サークルカットを選ぶと選択が要る項目が使えるようになる', async () => {
+    const { user } = await renderApp();
+    await selectUncheckedCircle(user);
+    const items = await openChecklistMenu(user);
+    const item = (label: string) =>
+      items.find((node) => textOf(node).startsWith(label)) as HTMLElement;
+
+    for (const label of [
+      '標準色で追加(A)',
+      '色1で追加',
+      '色9で追加',
+      'チェックリストから外す(R)',
+      'サークルのメモを編集する(M)',
+      '選択サークルをクリップボードにコピー(C)',
+    ]) {
+      expect(item(label).getAttribute('aria-disabled'), label).not.toBe('true');
+    }
+  }, 30000);
+
+  it('「標準色で追加(A)」(33040) は選択中のサークルを標準のチェック色で登録する', async () => {
+    const { user } = await renderApp();
+    await waitFor(() => expect(checkedCount()).toBe(65));
+    const cell = await selectUncheckedCircle(user);
+    expect(cell).not.toHaveClass('cut-cell--checked');
+
+    const items = await openChecklistMenu(user);
+    await user.click(
+      items.find((node) => textOf(node).startsWith('標準色で追加(A)')) as HTMLElement,
+    );
+
+    expect(cell).toHaveClass('cut-cell--checked');
+    // 標準色 (= 「標準のチェック色」の既定) は実物の会場マップで使われている緑。
+    const space = cell.querySelector('.cut-cell__space') as HTMLElement;
+    await waitFor(() => expect(space).toHaveStyle({ background: STANDARD_CHECK_COLOR_HEX }));
+    expect(checkedCount()).toBe(66);
+  }, 30000);
 });
 
 describe('App — 保存 (元実装の INI / チェックリストファイル相当)', () => {

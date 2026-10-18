@@ -7,7 +7,7 @@ import { loadPersistedState, savePersistedState } from './app/persistence';
 import { WEEKDAY_NAMES, WEEKDAY_SHORT } from './domain/weekday';
 import type { CheckColor, ChecklistEntry } from './app/catalog-state';
 import { MENU_COMMANDS } from './ui/menu/menu-defs';
-import { WINDOW_MENU_COMMANDS } from './ui/menu/to-menu-bar';
+import { CHECKLIST_MENU_COMMANDS, WINDOW_MENU_COMMANDS } from './ui/menu/to-menu-bar';
 import { TOOLBAR_COMMANDS } from './ui/main/toolbar-commands';
 import { fitZoom, type FitBox, type FitMode } from './ui/main/fit-zoom';
 import { MainWindow } from './ui/main/MainWindow';
@@ -238,10 +238,6 @@ const EXTRA_COMMANDS = {
   listCuts: 32868,
   openTwitter: 32872,
   openPixiv: 32873,
-  copyCircle: 1707,
-  pasteCircle: 1708,
-  clearUncheckedMemos: 32869,
-  clearAllMemos: 32874,
   helpContents: 32815,
   helpSearch: 32816,
   helpKeyword: 32817,
@@ -467,10 +463,18 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     const label = (circle: Circle) => `${blockOf(circle)?.name ?? ''}${circle.spaceNo}`;
     // 会場はページ先頭のサークルのブロック → 地区の名前 (実物の「西2壁」)。
     const area = (catalog?.areas ?? []).find((entry) => entry.id === blockOf(first)?.areaId)?.name ?? '';
-    return [`${date?.day ?? first.day}日${weekday}`, area, `${label(first)}〜${label(last)}`]
+    // 実物の表記は「9日（金）西2壁 あ36〜あ53」で、日付 + （曜日）と会場の間に空白を入れない
+    // (空白を入れるのは会場と配置範囲の間だけ)。
+    return [`${date?.day ?? first.day}日${weekday}${area}`, `${label(first)}〜${label(last)}`]
       .filter(Boolean)
       .join(' ');
   }, [catalog, pageCircles]);
+
+  /**
+   * 配置情報の帯の寄せ。実物は見開きの左右に合わせて、奇数ページは右寄せ、
+   * 偶数ページは左寄せにする (帯の白はカット格子と同じ幅のままで、寄せるのは文字だけ)。
+   */
+  const cutHeadingAlign: 'left' | 'right' = currentPage % 2 === 0 ? 'left' : 'right';
 
   // 「幅 / 高さ / 全体に合わせる」を選んでいるときは、表示領域と行数から拡大率を求め直す
   // (ウィンドウの大きさが変わっても追随する)。'free' のときは zoom をそのまま使う。
@@ -515,6 +519,18 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
   const selectedCircle: Circle | null =
     state.selectedId === null ? null : circlesById.get(state.selectedId) ?? null;
 
+  /**
+   * サークル詳細ウィンドウに出すサークル。カットビューで選択が外れたときも、直前まで
+   * 選んでいたサークルの情報を出し続ける (実機はカットのカーソルが外れても詳細が残る)。
+   */
+  const lastSelectedId = useRef<number | null>(null);
+  useEffect(() => {
+    if (state.selectedId !== null) lastSelectedId.current = state.selectedId;
+  }, [state.selectedId]);
+  const detailCircleId = state.selectedId ?? lastSelectedId.current;
+  const detailCircle: Circle | null =
+    detailCircleId === null ? null : circlesById.get(detailCircleId) ?? null;
+
   /** 動作設定 1022: 選択サークルの日付 / ブロックにサークル一覧を追従させる。 */
   const listFollow =
     state.settings.listFollowsBlock && selectedCircle !== null
@@ -525,19 +541,46 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
   // ジャンプ コンボと同じ表記で作り、スペースは実物の表記「地区 + ブロック + 番号 + a|b」
   // (例 東G30b) にする。抽選漏れ (day 0) はスペースが無いので渡さない。
   const detailPosition = useMemo(() => {
-    if (selectedCircle === null || selectedCircle.day === 0) return { dayLabel: '', areaLabel: '' };
-    const date = (catalog?.dates ?? []).find((entry) => entry.id === selectedCircle.day);
-    const block = (catalog?.blocks ?? []).find((entry) => entry.id === selectedCircle.blockId);
+    if (detailCircle === null || detailCircle.day === 0) return { dayLabel: '', areaLabel: '' };
+    const date = (catalog?.dates ?? []).find((entry) => entry.id === detailCircle.day);
+    const block = (catalog?.blocks ?? []).find((entry) => entry.id === detailCircle.blockId);
     const area = block
       ? (catalog?.areas ?? []).find((entry) => entry.id === block.areaId)
       : undefined;
     return {
       dayLabel: date ? WEEKDAY_NAMES[date.weekday] ?? '' : '',
-      areaLabel: `${area?.name ?? ''}${block?.name ?? ''}${selectedCircle.spaceNo}${
-        selectedCircle.spaceNoSub === 1 ? 'b' : 'a'
+      areaLabel: `${area?.name ?? ''}${block?.name ?? ''}${detailCircle.spaceNo}${
+        detailCircle.spaceNoSub === 1 ? 'b' : 'a'
       }`,
     };
-  }, [catalog, selectedCircle]);
+  }, [catalog, detailCircle]);
+
+  /** サークル詳細に出すサークルのチェックを切り替える (未選択でも直前のサークルに効く)。 */
+  const toggleDetailCheck = useCallback(() => {
+    if (detailCircleId === null) return;
+    dispatch({ type: 'checklist/toggle', id: detailCircleId, color: defaultCheckColor });
+  }, [defaultCheckColor, detailCircleId, dispatch]);
+
+  /** Google 検索を開く (検索条件 212 のとおりに検索語を組み立てる)。null は選択なし。 */
+  const openGoogleSearch = useCallback(
+    (circle: Circle | null) => {
+      if (circle === null) {
+        setMessage('サークルを選択してください');
+        return;
+      }
+      const query = buildGoogleQuery(circle, state.googleSearch);
+      if (query.length === 0) {
+        setMessage('検索する項目が選ばれていません');
+        return;
+      }
+      window.open(
+        `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+        '_blank',
+        'noreferrer',
+      );
+    },
+    [state.googleSearch],
+  );
 
   const checklistRows: ChecklistRow[] = useMemo(
     () =>
@@ -910,12 +953,16 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     [dispatch],
   );
 
-  // 起動直後は先頭のサークルを選択する。元実装はカットビューに常にカーソルが 1 つあり、
-  // サークル詳細ウィンドウにその中身が出ている (未選択状態は存在しない)。
+  /** 起動直後にカーソルを 1 つ置いたか (元実装はどのカットにもカーソルの無い状態で開かない)。 */
+  const cursorSeeded = useRef(false);
+
+  // 起動直後だけ先頭のサークルを選択する。元実装はカットビューにカーソルが 1 つある状態で開くが、
+  // カット以外をクリックすると選択は外れ、そのまま (勝手に選び直さない)。
   useEffect(() => {
-    if (state.selectedId !== null || circles.length === 0) return;
+    if (cursorSeeded.current || circles.length === 0) return;
+    cursorSeeded.current = true;
     focusCircle(circles[0].id);
-  }, [circles, state.selectedId, focusCircle]);
+  }, [circles, focusCircle]);
 
   /** ダミー登録を入れ終えたか (ユーザーが全件解除しても入れ直さない)。 */
   const demoSeeded = useRef(false);
@@ -1141,6 +1188,12 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         jumpToIndex(command - COMMAND_JUMP_INDEX, jumpDay);
         return;
       }
+      // チェックリスト: 標準色で追加 (33040)。選択中のサークルを標準のチェック色で登録する
+      // (カットのリターンキーと同じ動き)。
+      if (command === TOOLBAR_COMMANDS.checkAddStandardColor) {
+        handleToggleCheck();
+        return;
+      }
       // チェックツールバー: 色1〜色9 (指定色でチェックに追加 / 色変更) と、チェックリストから外す。
       const color = command - TOOLBAR_COMMANDS.checkColorBase;
       if (color >= 1 && color <= 9) {
@@ -1217,21 +1270,21 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
           jumpBlock(1);
           break;
         // チェックリスト: メモの消去 / クリップボード
-        case EXTRA_COMMANDS.clearUncheckedMemos:
+        case CHECKLIST_MENU_COMMANDS.clearUncheckedMemos:
           dispatch({
             type: 'memo/clearUnchecked',
             keepIds: state.checklist.map((entry) => entry.circleId),
           });
           setMessage('チェックしていないサークルのメモを消去しました');
           break;
-        case EXTRA_COMMANDS.clearAllMemos:
+        case CHECKLIST_MENU_COMMANDS.clearAllMemos:
           dispatch({ type: 'memo/clear' });
           setMessage('全てのメモを消去しました');
           break;
-        case EXTRA_COMMANDS.copyCircle:
+        case CHECKLIST_MENU_COMMANDS.copyCircle:
           copySelectedCircle();
           break;
-        case EXTRA_COMMANDS.pasteCircle:
+        case CHECKLIST_MENU_COMMANDS.pasteCircle:
           pasteCircles();
           break;
         // 検索: WEBページ / TWITTER / Pixiv を開く
@@ -1290,21 +1343,9 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
           goForward();
           break;
         case MENU_COMMANDS.googleSearch: {
-          if (selectedCircle === null) {
-            setMessage('サークルを選択してください');
-            break;
-          }
-          // 条件設定 (ダイアログ 212) のとおりに検索語を組み立てる。
-          const query = buildGoogleQuery(selectedCircle, state.googleSearch);
-          if (query.length === 0) {
-            setMessage('検索する項目が選ばれていません');
-            break;
-          }
-          window.open(
-            `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-            '_blank',
-            'noreferrer',
-          );
+          // 検索メニューは選択中のサークル、サークル詳細のボタンは詳細に出ているサークル
+          // (未選択なら直前のサークル) を検索する。
+          openGoogleSearch(selectedCircle);
           break;
         }
         case MENU_COMMANDS.memoEdit:
@@ -1417,6 +1458,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
       checklistSelection,
       copySelectedCircle,
       currentPage,
+      handleToggleCheck,
       dummyChecklistCsv,
       exportSettings,
       goBack,
@@ -1429,6 +1471,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
       jumpToIndex,
       lastPage,
       openCircleLink,
+      openGoogleSearch,
       pageCircles,
       pasteCircles,
       saveChecklist,
@@ -1542,6 +1585,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
         height={layout.main.height}
         circles={pageCircles}
         cutHeading={cutHeading}
+        cutHeadingAlign={cutHeadingAlign}
         message={message}
         pageNo={currentPage}
         selectedId={state.selectedId}
@@ -1579,22 +1623,22 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
           initialY={layout.detail.y}
           width={layout.detail.width}
           height={layout.detail.height}
-          circle={selectedCircle}
-          genreName={selectedCircle ? genreNames[selectedCircle.genreId] ?? '' : ''}
+          circle={detailCircle}
+          genreName={detailCircle ? genreNames[detailCircle.genreId] ?? '' : ''}
           dayLabel={detailPosition.dayLabel}
           areaLabel={detailPosition.areaLabel}
-          checked={state.selectedId !== null && checkedIds.has(state.selectedId)}
-          checkColor={colorById.get(state.selectedId ?? -1) ?? 0}
-          memo={state.selectedId === null ? '' : memoOf(state.selectedId)}
-          onToggleCheck={handleToggleCheck}
+          checked={detailCircleId !== null && checkedIds.has(detailCircleId)}
+          checkColor={colorById.get(detailCircleId ?? -1) ?? 0}
+          memo={detailCircleId === null ? '' : memoOf(detailCircleId)}
+          onToggleCheck={toggleDetailCheck}
           onSetColor={(color) =>
-            state.selectedId !== null &&
-            dispatch({ type: 'checklist/setColor', ids: [state.selectedId], color })
+            detailCircleId !== null &&
+            dispatch({ type: 'checklist/setColor', ids: [detailCircleId], color })
           }
           onMemoChange={(memo) =>
-            state.selectedId !== null && dispatch({ type: 'memo/set', id: state.selectedId, memo })
+            detailCircleId !== null && dispatch({ type: 'memo/set', id: detailCircleId, memo })
           }
-          onGoogleSearch={() => handleCommand(MENU_COMMANDS.googleSearch)}
+          onGoogleSearch={() => openGoogleSearch(detailCircle)}
           onGoogleSearchSettings={() => setDialog('googleSearch')}
           onClose={() => setDetailOpen(false)}
           onMinimize={() => iconify('detail')}

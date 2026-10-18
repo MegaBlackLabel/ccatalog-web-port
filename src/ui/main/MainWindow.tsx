@@ -70,6 +70,11 @@ export type MainWindowProps = {
    */
   cutHeading?: string;
   /**
+   * 配置情報の帯の寄せ。奇数ページは右寄せ、偶数ページは左寄せにする
+   * (帯の白はカット格子と同じ幅のままで、寄せるのは文字だけ)。
+   */
+  cutHeadingAlign?: 'left' | 'right';
+  /**
    * ブロック (ComiketBlock)。インデックスジャンプの選択肢を実物と同じ
    * 「あ」〜「れ」→「Ａ」〜「Ｒ」→「ア」〜「リ」の 100 個で出す。
    */
@@ -413,6 +418,7 @@ export function MainWindow({
   circles,
   message = '',
   cutHeading = '',
+  cutHeadingAlign = 'left',
   blocks,
   pageNo,
   selectedId,
@@ -700,11 +706,15 @@ export function MainWindow({
   // ステータスバーのページ送りスライダの範囲。総ページ数が来ていなければ現在ページまで。
   const pageCount = Math.max(lastPage ?? pageNo, pageNo, 1);
 
-  // RT_MENU 128 の定義 + 実行時に作られる「ウィンドウ」メニュー
+  // RT_MENU 128 の定義 + 実行時に作られる「チェックリスト」「ウィンドウ」メニュー
   // (src/ui/menu/to-menu-bar.ts が単一の変換元)。
   const menus = toMenuBarMenus(
     onCommand,
-    { visibleBars: shownBars, checked: checkedCommands ?? [] },
+    {
+      visibleBars: shownBars,
+      checked: checkedCommands ?? [],
+      hasSelection: selectedId !== null,
+    },
     checkColor,
   );
 
@@ -816,6 +826,7 @@ export function MainWindow({
           circles={circles}
 
           heading={cutHeading}
+          headingAlign={cutHeadingAlign}
           selectedId={selectedId}
           checkedIds={checkedIds}
           colorById={colorById}
