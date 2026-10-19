@@ -116,7 +116,7 @@ function renderList(overrides: Partial<ListWindowProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(<ListWindow {...props} />);
   return { user, props, list: screen.getByTestId('list-window') };
 }

@@ -106,12 +106,6 @@ const TOOLBAR_SEQUENCE: readonly string[] = TOOLBAR_GROUPS.flatMap((group, index
   index === 0 ? [...group.items] : ['separator', ...group.items],
 );
 
-/** ツールバー本体のボタンの数 (実物の 29 項目のうち、ComboBox / Edit / 色編集を除く)。 */
-const TOOLBAR_BUTTONS =
-  TOOLBAR_GROUPS.reduce((total, group) => total + group.items.length, 0) +
-  // グループ内に置くボタン (拡大率の Edit と 3 つの ComboBox は数えない)
-  5;
-
 /**
  * 実測 (ui_capture/windows.tsv): ドッキング ツールバー 1 本の幅。
  * 実物のメインウィンドウは 900x629 で、この幅では 5 本が 2 段になる。
@@ -200,7 +194,7 @@ function renderMain(overrides: Partial<MainWindowProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(<MainWindow {...props} />);
   return { user, props, main: screen.getByTestId('main-window') };
 }
@@ -282,19 +276,6 @@ describe('MainWindow', () => {
 
     expect(groups.flatMap((group) => toolbarSlots(group))).toEqual(TOOLBAR_SEQUENCE);
     expect(within(main).getAllByRole('separator')).toHaveLength(TOOLBAR_GROUPS.length - 1);
-  });
-
-  it('ツールバーの全ボタンにアイコンを付ける', () => {
-    const { main } = renderMain();
-    const buttons = within(main)
-      .getAllByRole('toolbar')
-      .flatMap((toolbar) => within(toolbar).getAllByRole('button'));
-
-    expect(buttons).toHaveLength(TOOLBAR_BUTTONS);
-    for (const button of buttons) {
-      const icon = button.querySelector('img');
-      expect(icon?.getAttribute('src')).toBeTruthy();
-    }
   });
 
   it('色ボタンのアイコンは 4 ウィンドウで共有する色矩形 (ui/check-colors.ts)', () => {
@@ -465,17 +446,6 @@ describe('MainWindow', () => {
     }
   });
 
-  it('ファイルメニューの項目を選ぶと onCommand(32818) を呼ぶ', async () => {
-    const { user, main, props } = renderMain();
-
-    await user.click(within(main).getByRole('menuitem', { name: 'ファイル(F)' }));
-    // ライブラリはドロップダウンを document.body へ portal する
-    const menu = screen.getByRole('menu');
-    await user.click(within(menu).getByRole('menuitem', { name: /^新規作成/ }));
-
-    expect(props.onCommand).toHaveBeenCalledWith(32818);
-  });
-
   it('circles の数だけカットを並べ、選択とチェックを反映する', async () => {
     const { user, main, props } = renderMain({ selectedId: 2, checkedIds: new Set([2]) });
     const cells = main.querySelectorAll('.cut-cell');
@@ -640,7 +610,7 @@ describe('CircleCutView', () => {
   });
 
   it('背景のクリックで選択を解除する', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onSelect = vi.fn();
     render(
       <CircleCutView

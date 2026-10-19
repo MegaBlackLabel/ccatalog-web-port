@@ -75,7 +75,7 @@ function renderRoundSwitch(overrides: Partial<RoundSwitchDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<RoundSwitchDialog {...props} />);
   return { user, props, view, dialog: within(view.container).getByTestId('round-switch-dialog') };
 }
@@ -90,7 +90,7 @@ function renderCircleData(overrides: Partial<CircleDataDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<CircleDataDialog {...props} />);
   return { user, props, view, dialog: within(view.container).getByTestId('circle-data-dialog') };
 }
@@ -106,7 +106,7 @@ function renderImageData(overrides: Partial<ImageDataDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<ImageDataDialog {...props} />);
   return { user, props, view, dialog: within(view.container).getByTestId('image-data-dialog') };
 }
@@ -118,7 +118,7 @@ function renderDatabaseMerge(overrides: Partial<DatabaseMergeDialogProps> = {}) 
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<DatabaseMergeDialog {...props} />);
   return { user, props, view, dialog: within(view.container).getByTestId('database-merge-dialog') };
 }
@@ -130,7 +130,7 @@ function renderMemoMerge(overrides: Partial<MemoMergeDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<MemoMergeDialog {...props} />);
   return { user, props, view, dialog: within(view.container).getByTestId('memo-merge-dialog') };
 }
@@ -143,7 +143,7 @@ function renderLoadCircle(overrides: Partial<LoadCircleConfirmDialogProps> = {})
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<LoadCircleConfirmDialog {...props} />);
   return { user, props, view, dialog: within(view.container).getByTestId('load-circle-confirm-dialog') };
 }
@@ -155,7 +155,7 @@ function renderDuplicateCheck(overrides: Partial<DuplicateCheckDialogProps> = {}
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<DuplicateCheckDialog {...props} />);
   return { user, props, view, dialog: within(view.container).getByTestId('duplicate-check-dialog') };
 }

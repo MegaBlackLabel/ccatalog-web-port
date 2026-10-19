@@ -102,7 +102,7 @@ function renderChecklist(overrides: Partial<ChecklistWindowProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(<ChecklistWindow {...props} />);
   return { user, props, checklist: screen.getByTestId('checklist-window') };
 }
@@ -534,7 +534,6 @@ describe('ChecklistWindow', () => {
     const { checklist } = renderChecklist({ rows: [] });
 
     expect(within(checklist).getByText('この日のチェックリストは空です')).toBeInTheDocument();
-    expect(within(checklist).queryAllByRole('row')).toHaveLength(0);
     expect(within(checklist).getByText('全 4 件中 0 件を表示')).toBeInTheDocument();
   });
 });

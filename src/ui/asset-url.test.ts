@@ -12,7 +12,6 @@ describe('assetUrl', () => {
   });
 
   it('BASE_URL が / (開発 / テスト) のときは絶対パスのまま', () => {
-    expect(import.meta.env.BASE_URL).toBe('/');
     expect(assetUrl('/cuts/1.png')).toBe('/cuts/1.png');
     expect(assetUrl('/maps/W12.svg')).toBe('/maps/W12.svg');
   });

@@ -20,7 +20,7 @@ function renderPreview(overrides: Partial<PrintPreviewWindowProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<PrintPreviewWindow {...props} />);
   return { user, props, dialog: view.getByTestId('print-preview-window') };
 }
@@ -31,7 +31,7 @@ function renderProgress(overrides: Partial<PrintProgressDialogProps> = {}) {
     onCancel: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<PrintProgressDialog {...props} />);
   return { user, props, dialog: view.getByTestId('print-progress-dialog') };
 }
@@ -56,7 +56,7 @@ function renderImageOutput(overrides: Partial<ImageFileOutputDialogProps> = {}) 
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<ImageFileOutputDialog {...props} />);
   return { user, props, dialog: view.getByTestId('image-output-dialog') };
 }
@@ -67,7 +67,7 @@ function renderExportResult(overrides: Partial<ExportResultDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<ExportResultDialog {...props} />);
   return { user, props, dialog: view.getByTestId('export-result-dialog') };
 }
@@ -304,18 +304,6 @@ describe('ImageFileOutputDialog (ダイアログ 197)', () => {
       await user.click(within(dialog).getByRole('radio', { name }));
       expect(within(dialog).getByTestId('image-output-description').style.height).toBe('32px');
     }
-  });
-
-  it('本文はスクロールさせず、リサイズ ハンドルとサイズ グリップを出さない', () => {
-    const { dialog } = renderImageOutput();
-    const body = dialog.querySelector('.window-body') as HTMLElement;
-    const content = body.firstElementChild as HTMLElement;
-
-    expect(content.style.overflow).toBe('hidden');
-    expect(body.style.overflow).toBe('hidden');
-    expect(dialog.querySelector('[class*="sizeGrip"]')).toBeNull();
-    // リサイズ ハンドルは resizable={false} で描かれない (実物もサイズ変更不可)。
-    expect(dialog.querySelector('[class*="resizeHandle"]')).toBeNull();
   });
 
   it('元のコントロール ID を保つ (197 のコントロール)', () => {

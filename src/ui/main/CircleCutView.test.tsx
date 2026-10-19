@@ -217,7 +217,7 @@ describe('CircleCutView — 6 列の格子 (実物のカット枠)', () => {
   });
 
   it('セルにカーソルが乗るとサークルを通知し、離れると null を通知する', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onHoverCircle = vi.fn();
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0, y: 0, top: 0, left: 0, right: 2000, bottom: 2000, width: 2000, height: 2000,

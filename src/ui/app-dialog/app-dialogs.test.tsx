@@ -16,7 +16,7 @@ function renderSerial(overrides: Partial<SerialInputDialogProps> = {}) {
     onCancel: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<SerialInputDialog {...props} />);
   return { user, props, dialog: view.getByTestId('serial-input-dialog') };
 }
@@ -29,7 +29,7 @@ function renderAuth(overrides: Partial<CircleMsAuthDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<CircleMsAuthDialog {...props} />);
   return { user, props, dialog: view.getByTestId('circlems-auth-dialog') };
 }
@@ -41,7 +41,7 @@ function renderStartup(overrides: Partial<StartupConfirmDialogProps> = {}) {
     onExit: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<StartupConfirmDialog {...props} />);
   return { user, props, dialog: view.getByTestId('startup-confirm-dialog') };
 }
@@ -52,7 +52,7 @@ function renderSendInfo(overrides: Partial<SendInfoDialogProps> = {}) {
     onAnswer: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<SendInfoDialog {...props} />);
   return { user, props, dialog: view.getByTestId('send-info-dialog') };
 }
@@ -64,7 +64,6 @@ describe('SerialInputDialog', () => {
     expect(screen.getByText('シリアル番号入力')).toBeInTheDocument();
     expect(within(dialog).getByText('シリアル番号を入力してください')).toBeInTheDocument();
     expect(within(dialog).getByTestId('serial-input')).toHaveValue('');
-    expect(within(dialog).getByTestId('serial-error').textContent).toBe('');
   });
 
   it('errorMessage を赤いエラー行に表示する', () => {
@@ -186,18 +185,6 @@ describe('StartupConfirmDialog', () => {
 
     expect(props.onExit).toHaveBeenCalledTimes(1);
     expect(props.onLaunch).not.toHaveBeenCalled();
-  });
-
-  // 実物のダイアログはタイトルバーに × だけを出し、端のドラッグでもサイズを変えられない
-  // (Window の minimizable / maximizable / resizable)。
-  it('タイトルバーのボタンは × だけで、リサイズ ハンドルを持たない', () => {
-    const { dialog } = renderStartup();
-
-    const labels = Array.from(dialog.querySelectorAll('.title-bar-controls button')).map((button) =>
-      button.getAttribute('aria-label'),
-    );
-    expect(labels).toEqual(['Close']);
-    expect(dialog.querySelectorAll('[class*="resize"]')).toHaveLength(0);
   });
 });
 

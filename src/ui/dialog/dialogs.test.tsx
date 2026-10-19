@@ -32,7 +32,7 @@ function renderMemo(overrides: Partial<MemoDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<MemoDialog {...props} />);
   return { user, props, dialog: view.getByTestId('memo-dialog') };
 }
@@ -46,7 +46,7 @@ function renderGoto(overrides: Partial<GotoPageDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<GotoPageDialog {...props} />);
   return { user, props, dialog: view.getByTestId('goto-page-dialog') };
 }
@@ -59,7 +59,7 @@ function renderAbout(overrides: Partial<AboutDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<AboutDialog {...props} />);
   return { user, props, dialog: view.getByTestId('about-dialog') };
 }

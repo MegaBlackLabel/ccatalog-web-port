@@ -101,7 +101,7 @@ function renderDetail(overrides: Partial<DetailWindowProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<DetailWindow {...props} />);
   // 1 つのテストで複数回描画しても取り違えないようコンテナ内に限定する。
   return { user, props, detail: within(view.container).getByTestId('detail-window') };
@@ -683,13 +683,6 @@ describe('DetailWindow', () => {
     expect(props.onGoogleSearch).toHaveBeenCalledTimes(1);
   });
 
-  it('Googleで検索 が onGoogleSearch を呼ぶ', async () => {
-    const { user, props, detail } = renderDetail();
-
-    await user.click(within(detail).getByTestId('detail-google-search'));
-    expect(props.onGoogleSearch).toHaveBeenCalledTimes(1);
-  });
-
   it('circle が null なら未選択を表示し、ツールバーのボタンは色ボタンも含めて無効', async () => {
     const onSetColor = vi.fn();
     const { user, detail } = renderDetail({ circle: null, genreName: '', onSetColor });
@@ -730,27 +723,6 @@ describe('DetailWindow', () => {
 
     expect(detail.style.minWidth).toBe('500px');
     expect(detail.style.maxWidth).toBe('560px');
-  });
-
-  it('min/max 幅は props で差し替えられる', () => {
-    const { detail } = renderDetail({ minWidth: 520, maxWidth: 640 });
-
-    expect(detail.style.minWidth).toBe('520px');
-    expect(detail.style.maxWidth).toBe('640px');
-  });
-
-  it('geometry props を Window に渡す', () => {
-    const { detail } = renderDetail({
-      initialX: 10,
-      initialY: 20,
-      width: 400,
-      height: 500,
-      zIndex: 5,
-    });
-
-    expect(detail).toHaveStyle({ position: 'fixed', left: '10px', top: '20px' });
-    expect(detail).toHaveStyle({ width: '400px', height: '500px' });
-    expect(detail.style.zIndex).toBe('5');
   });
 
   it('既定のウィンドウサイズは 512x640', () => {

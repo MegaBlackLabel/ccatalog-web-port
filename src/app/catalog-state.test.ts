@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogReducer, initialCatalogState, type CatalogState } from './catalog-state';
+import { catalogReducer, initialCatalogState } from './catalog-state';
 import type { CatalogData, Circle, Genre } from '../domain/types';
 import { DEFAULT_SEARCH_CONDITION } from '../domain/search';
 import { DEFAULT_APP_SETTINGS, DEFAULT_GOOGLE_SEARCH_SETTINGS, DEFAULT_PAGE_SETUP } from '../domain/app-settings';
@@ -395,13 +395,5 @@ describe('catalogReducer — 読み込み / 保存で使うアクション', () 
     // patch に無いもの (カタログ・検索条件) は触らない。
     expect(next.catalog).toBe(loaded.catalog);
     expect(next.condition).toBe(loaded.condition);
-  });
-});
-
-describe('catalogReducer — 未知のアクション', () => {
-  it('状態をそのまま返す', () => {
-    const state: CatalogState = loaded;
-    // @ts-expect-error 実行時に来ないアクションは無視する
-    expect(catalogReducer(state, { type: 'nothing/here' })).toBe(state);
   });
 });

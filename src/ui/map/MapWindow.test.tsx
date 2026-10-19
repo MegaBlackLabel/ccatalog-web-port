@@ -102,18 +102,19 @@ function renderMap(overrides: Partial<MapWindowProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(<MapWindow {...props} />);
   return { user, props };
 }
 
 describe('MapWindow', () => {
-  it('マップ画像とマス、件数、タイトルを表示する', () => {
+  it('マップ画像とマス、タイトルを表示する', () => {
     const { props } = renderMap();
 
     expect(screen.getByTestId('map-image')).toHaveAttribute('src', '/maps/W12.svg');
     expect(screen.getByText('会場マップ - 西12')).toBeInTheDocument();
-    expect(screen.getByText('2 件のサークルが表示されています')).toBeInTheDocument();
+    // ステータスバーは文字を出さない (実機の会場マップは下端まで地図)。
+    expect(screen.getByTestId('map-window').querySelector('.status-bar')?.textContent).toBe('');
 
     const board = screen.getByTestId('map-board');
     expect(within(board).getAllByTestId('map-cell')).toHaveLength(props.entries.length);

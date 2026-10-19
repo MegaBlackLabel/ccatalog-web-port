@@ -3,6 +3,7 @@ import { Taskbar, Win98Provider } from '@megablacklabel/react98retro';
 import '@megablacklabel/react98retro/style.css';
 import './styles/app.css';
 import { useCatalog } from './app/use-catalog';
+import { DUMMY_CATALOG, type CatalogSource } from './data/catalog-source';
 import { loadPersistedState, savePersistedState } from './app/persistence';
 import { WEEKDAY_NAMES, WEEKDAY_SHORT } from './domain/weekday';
 import type { CheckColor, ChecklistEntry } from './app/catalog-state';
@@ -334,8 +335,12 @@ const SUPPORT_URL = 'https://github.com/MegaBlackLabel/ccatalog-web-port';
  * 起動シーケンス (起動確認 → シリアル番号入力 → 情報送信の確認) は既定で出さない
  * (ユーザー指示。`<App startup />` で実機と同じシーケンスを出せる)。
  */
-export default function App({ startup = false }: { startup?: boolean } = {}) {
-  const { state, dispatch } = useCatalog();
+export default function App({
+  startup = false,
+  // テストから小さいカタログを差し込むための口 (useCatalog が元々 source を受ける)。
+  source = DUMMY_CATALOG,
+}: { startup?: boolean; source?: CatalogSource } = {}) {
+  const { state, dispatch } = useCatalog(source);
 
   // ウィンドウの配置は取り込み画像の割合から (起動時の画面の大きさで決める)。
   // 「ウィンドウ位置を初期化」で作り直すため、key を替えて Window をマウントし直す。

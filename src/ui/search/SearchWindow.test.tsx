@@ -34,7 +34,7 @@ function searchProps(overrides: Partial<SearchWindowProps> = {}): SearchWindowPr
 
 function renderSearch(overrides: Partial<SearchWindowProps> = {}) {
   const props = searchProps(overrides);
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(<SearchWindow {...props} />);
   return { user, props, search: screen.getByTestId('search-window') };
 }
@@ -211,7 +211,7 @@ describe('SearchWindow', () => {
   });
 
   it('キーワード入力が condition.keywords を更新する', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const onConditionChange = vi.fn();
     render(<ControlledSearch onConditionChange={onConditionChange} />);
 

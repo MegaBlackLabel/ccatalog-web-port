@@ -12,7 +12,7 @@ function renderDialog(overrides: Partial<CheckColorDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(<CheckColorDialog {...props} />);
   return { user, props, dialog: screen.getByTestId('check-color-dialog') };
 }

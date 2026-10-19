@@ -44,7 +44,7 @@ function renderPreferences(overrides: Partial<PreferencesDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<PreferencesDialog {...props} />);
   return { user, props, dialog: view.getByTestId('preferences-dialog') };
 }
@@ -56,7 +56,7 @@ function renderGoogleSearch(overrides: Partial<GoogleSearchDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<GoogleSearchDialog {...props} />);
   return { user, props, dialog: view.getByTestId('google-search-dialog') };
 }
@@ -79,7 +79,7 @@ function renderPageSetup(overrides: Partial<PageSetupDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<PageSetupDialog {...props} />);
   return { user, props, dialog: view.getByTestId('page-setup-dialog') };
 }
@@ -96,7 +96,7 @@ function renderListDialog(overrides: Partial<ListDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<ListDialog {...props} />);
   return { user, props, dialog: view.getByTestId('list-dialog') };
 }
@@ -122,7 +122,7 @@ describe('PreferencesDialog — 列の表示項目の並べ替え (1694〜1699)'
   }
 
   it('行を選んで「前へ移動」すると、一覧の並びがその場で変わる', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<StatefulPreferences />);
     const dialog = screen.getByTestId('preferences-dialog');
     // ライブラリのタブは li[role=tab] の中の a を押すと切り替わる。
@@ -150,7 +150,7 @@ describe('PreferencesDialog — 列の表示項目の並べ替え (1694〜1699)'
   });
 
   it('チェックを外した列は一覧の後ろへ回る (チェックした列が先)', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     render(<StatefulPreferences />);
     const dialog = screen.getByTestId('preferences-dialog');
     // ライブラリのタブは li[role=tab] の中の a を押すと切り替わる。

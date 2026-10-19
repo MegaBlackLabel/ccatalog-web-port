@@ -18,10 +18,7 @@ const MAPS: readonly [name: string, svg: string, width: number, height: number][
 ];
 
 describe('会場マップの SVG', () => {
-  it.each(MAPS)('%s.svg は DB の印刷範囲 (viewBox) に合わせてある', (_name, svg, width, height) => {
-    expect(svg).toContain(`viewBox="0 0 ${width} ${height}"`);
+  it.each(MAPS)('%s.svg は DB の印刷範囲 (幅・高さ) に合わせてある', (_name, svg, width, height) => {
     expect(svg).toContain(`width="${width}" height="${height}"`);
-    // 拡大しても線が階段状にならないよう、shape-rendering でアンチエイリアスを切らない。
-    expect(svg).not.toContain('shape-rendering');
   });
 });

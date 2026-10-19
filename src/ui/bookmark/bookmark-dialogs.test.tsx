@@ -21,7 +21,7 @@ function renderAdd(overrides: Partial<BookmarkAddDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(<BookmarkAddDialog {...props} />);
   return { user, props, dialog: screen.getByTestId('bookmark-add-dialog') };
 }
@@ -36,7 +36,7 @@ function renderOrganize(overrides: Partial<BookmarkOrganizeDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   render(<BookmarkOrganizeDialog {...props} />);
   return { user, props, dialog: screen.getByTestId('bookmark-organize-dialog') };
 }

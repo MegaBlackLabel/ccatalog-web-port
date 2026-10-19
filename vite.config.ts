@@ -22,5 +22,11 @@ export default defineConfig({
     setupFiles: ['./src/test-setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    // 統合テスト (App) は 1 本で数秒かかる (jsdom の描画 + メニュー操作)。
+    // テストを分割してワーカーを並べると CPU 競合で 5 秒を超えるため、余裕を持たせる。
+    testTimeout: 30000,
+    // jsdom + 大きな DOM のテストは CPU とメモリを使うので、コア数いっぱい (16) に
+    // 並べるとコンテキストスイッチで逆に遅くなる (実測: 16 で 65s / 10 で 34s)。
+    maxWorkers: 10,
   },
 });

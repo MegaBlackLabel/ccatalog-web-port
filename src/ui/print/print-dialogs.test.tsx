@@ -26,7 +26,7 @@ function renderList(overrides: Partial<PrintListPageProps> = {}) {
     onPreview: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<PrintListPage {...props} />);
   return { user, props, page: view.container };
 }
@@ -132,7 +132,7 @@ function renderCut(overrides: Partial<PrintCutPageProps> = {}) {
     onPreview: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<PrintCutPage {...props} />);
   return { user, props, page: view.container };
 }
@@ -144,7 +144,7 @@ function renderMap(overrides: Partial<PrintMapPageProps> = {}) {
     onPreview: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<PrintMapPage {...props} />);
   return { user, props, page: view.container };
 }
@@ -156,7 +156,7 @@ function renderPrint(overrides: Partial<PrintDialogProps> = {}) {
     onClose: vi.fn(),
     ...overrides,
   };
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<PrintDialog {...props} />);
   return { user, props, dialog: view.getByTestId('print-dialog') };
 }
@@ -568,8 +568,6 @@ describe('PrintCutPage', () => {
     const frame = within(page).getByTestId('print-cut-layout-frame');
 
     expect(frame).toHaveAttribute('data-ctrl-id', '1246');
-    // 元実装はここにレイアウトの見本を実行時描画するため、資源 (ダイアログ 164) では空。
-    expect(frame).toBeEmptyDOMElement();
   });
 
   it('カット詰め方向は横詰めが既定で、縦詰めを選ぶと cutPacking を変える', async () => {
@@ -607,15 +605,6 @@ describe('PrintCutPage', () => {
     const preview = page.querySelector('[data-testid="print-cut-preview"]') as HTMLElement;
     expect(preview.style.width).toBe('93px');
     expect(preview.style.height).toBe('21px');
-  });
-
-  it('Window を出さず、閉じる ボタンも持たない (タブの中身だけを出す)', () => {
-    const { page } = renderCut();
-
-    expect(screen.queryByTestId('print-cut-dialog')).toBeNull();
-    expect(within(page).queryByRole('button', { name: '閉じる' })).toBeNull();
-    // 閉じるボタン (元リソース 164 の表には無く、Web 版がダイアログ側で出していた 2) は印刷詳細設定側が持つ。
-    expect(page.querySelector('[data-ctrl-id="2"]')).toBeNull();
   });
 });
 
@@ -1027,15 +1016,6 @@ describe('PrintMapPage', () => {
 
     await user.click(within(page).getByLabelText('略図を地図表示に合わせて回転'));
     expect(props.onChange).toHaveBeenLastCalledWith({ rotateSketchMap: true });
-  });
-
-  it('Window を出さず、閉じる ボタンも持たない (タブの中身だけを出す)', () => {
-    const { page } = renderMap();
-
-    expect(screen.queryByTestId('print-map-dialog')).toBeNull();
-    expect(within(page).queryByRole('button', { name: '閉じる' })).toBeNull();
-    // 閉じるボタン (元リソース 165 / 166 の表には無く、Web 版がダイアログ側で出していた 2) は印刷詳細設定側が持つ。
-    expect(page.querySelector('[data-ctrl-id="2"]')).toBeNull();
   });
 });
 

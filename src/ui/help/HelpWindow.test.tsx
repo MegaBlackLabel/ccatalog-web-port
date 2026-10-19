@@ -60,7 +60,7 @@ async function expectTabs(help: HTMLElement) {
 
 function renderHelp(pane: 'contents' | 'keyword' | 'search' = 'contents') {
   const load = vi.fn(() => Promise.resolve(DATA));
-  const user = userEvent.setup();
+  const user = userEvent.setup({ delay: null });
   const view = render(<HelpWindow pane={pane} load={load} onClose={vi.fn()} />);
   return { user, load, view };
 }
