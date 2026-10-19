@@ -124,17 +124,19 @@ async function toggleSetting(user: UserEvent, label: string) {
 }
 
 describe('App — 元アプリの画面が揃っている', () => {
-  it('実装済みのウィンドウ (カット/詳細/チェックリスト/一覧/マップ) を同時に表示する', async () => {
-    await renderApp();
+  it('実装済みのウィンドウ (カット/詳細/チェックリスト/マップ) を同時に表示する', async () => {
+    const { user } = await renderApp();
     expect(await screen.findByTestId('main-window')).toBeInTheDocument();
     expect(await screen.findByTestId('detail-window')).toBeInTheDocument();
     expect(await screen.findByTestId('checklist-window')).toBeInTheDocument();
     expect(await screen.findByTestId('cut-view')).toBeInTheDocument();
-    expect(await screen.findByTestId('list-window')).toBeInTheDocument();
     expect(await screen.findByTestId('map-window')).toBeInTheDocument();
-    // 検索ダイアログだけは必要なときにメニューから開く。
+    // サークル一覧と検索ダイアログは、必要なときにメニューから開く。
+    expect(screen.queryByTestId('list-window')).not.toBeInTheDocument();
     expect(screen.queryByTestId('search-window')).not.toBeInTheDocument();
-  });
+    await chooseMenu(user, 'ウィンドウ(W)', /^サークル一覧/);
+    expect(await screen.findByTestId('list-window')).toBeInTheDocument();
+  }, 30000);
 
   it('画面下にタスクバーを出し、トレイの時計も持つ', async () => {
     await renderApp();
@@ -147,7 +149,7 @@ describe('App — 元アプリの画面が揃っている', () => {
     expect(within(taskbar).getByText(/^\d{1,2}:\d{2}$/)).toBeInTheDocument();
   });
 
-  it('画面が広いときは主要 5 ウィンドウを初期表示する (地図は実物と同じ 690 幅でサークル詳細と重なる)', async () => {
+  it('既定の配置は取り込み画像と同じ (カット=左いっぱい / 詳細+マップ=右上 / チェックリスト=右下)', async () => {
     const widthDesc = Object.getOwnPropertyDescriptor(window, 'innerWidth');
     const heightDesc = Object.getOwnPropertyDescriptor(window, 'innerHeight');
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 2560 });
@@ -155,7 +157,12 @@ describe('App — 元アプリの画面が揃っている', () => {
     try {
       render(<App startup={false} />);
       expect(await screen.findByTestId('main-window')).toBeInTheDocument();
-      const boxes = ['main-window', 'detail-window', 'checklist-window', 'list-window', 'map-window'].map((id) => {
+
+      // 既定で出すのは取り込み画像の 4 枚だけ (サークル一覧と検索はメニューから開く)。
+      expect(screen.queryByTestId('list-window')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('search-window')).not.toBeInTheDocument();
+
+      const boxes = ['main-window', 'detail-window', 'map-window', 'checklist-window'].map((id) => {
         const element = screen.getByTestId(id);
         const root = (element.matches('.window') ? element : element.querySelector('.window')) as HTMLElement;
         expect(root, `${id} のウィンドウ枠`).not.toBeNull();
@@ -167,35 +174,209 @@ describe('App — 元アプリの画面が揃っている', () => {
           height: Number.parseFloat(root.style.height),
         };
       });
+      const [main, detail, map, checklist] = boxes;
       for (const box of boxes) {
         expect(Number.isFinite(box.left) && Number.isFinite(box.top), `${box.id} の位置`).toBe(true);
         expect(box.width).toBeGreaterThan(0);
         expect(box.height).toBeGreaterThan(0);
       }
-      // 会場マップは実物 (ヘルプのスクリーンショット) と同じ 690x542 を最小幅にしているので、
-      // 1920px 幅のレイアウトでは右端でサークル詳細と重なる (実物の初期配置も カット / 一覧 /
-      // 地図 が重なっている)。それ以外の組み合わせは重ならずに並ぶ。
-      const overlaps = (a: (typeof boxes)[number], b: (typeof boxes)[number]) =>
-        a.left < b.left + b.width &&
-        b.left < a.left + a.width &&
-        a.top < b.top + b.height &&
-        b.top < a.top + a.height;
-      for (let i = 0; i < boxes.length; i += 1) {
-        for (let j = i + 1; j < boxes.length; j += 1) {
-          const a = boxes[i];
-          const b = boxes[j];
-          const pair = [a.id, b.id].sort().join(' / ');
-          const expected = pair === 'detail-window / map-window';
-          expect(`${pair}: ${overlaps(a, b) ? '重なる' : '重ならない'}`).toBe(
-            `${pair}: ${expected ? '重なる' : '重ならない'}`,
-          );
-        }
-      }
+
+      // サークルカットは左端から画面の高さいっぱい。詳細とマップは右上に並ぶ
+      // (取り込み画像の詳細 554 は マップ 528 より高い)。
+      expect(main.left).toBeLessThan(detail.left);
+      expect(detail.top).toBe(map.top);
+      // 上段の 2 枚はメインと同じ Y から始める (画像の実測は 12 で 1px 下がっている)。
+      expect(detail.top).toBe(main.top);
+      expect(map.top).toBe(main.top);
+      expect(detail.height).toBeGreaterThan(map.height);
+      expect(map.left).toBeGreaterThan(detail.left + detail.width - 8);
+      // チェックリストは上段のすぐ下 (接する) から右下で、サークルカットに重ならない。
+      expect(checklist.top).toBeGreaterThanOrEqual(detail.top + detail.height - 8);
+      expect(checklist.left).toBeGreaterThanOrEqual(main.left + main.width);
+      expect(checklist.left + checklist.width).toBeGreaterThan(map.left + map.width - 8);
+      // 画面が画像 (1966x940) より広いので、取り込み画像の実寸のまま置く
+      // (メインだけは最小幅 659 が画像の 657 より 2px 広いので 659 になる。
+      //  右の 3 枚はメインの右端 + 1px から並べ直すので 詳細 668 / マップ 1169 /
+      //  チェックリスト 668 になる。上段 2 枚の Y はメインに揃える)。
+      expect([main.left, main.top, main.width, main.height]).toEqual([8, 11, 659, 925]);
+      expect([detail.left, detail.top, detail.width, detail.height]).toEqual([668, 11, 500, 554]);
+      expect([map.left, map.top, map.width, map.height]).toEqual([1169, 11, 796, 528]);
+      expect([checklist.left, checklist.top, checklist.width, checklist.height]).toEqual([
+        668, 567, 1299, 369,
+      ]);
     } finally {
       if (widthDesc) Object.defineProperty(window, 'innerWidth', widthDesc);
       if (heightDesc) Object.defineProperty(window, 'innerHeight', heightDesc);
     }
   });
+
+  it('画面が画像と同じ大きさでもチェックリストはサークルカットに重ならない', async () => {
+    const widthDesc = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const heightDesc = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1966 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 940 });
+    try {
+      render(<App startup={false} />);
+      expect(await screen.findByTestId('main-window')).toBeInTheDocument();
+
+      const boxOf = (id: string) => {
+        const element = screen.getByTestId(id);
+        const root = (element.matches('.window') ? element : element.querySelector('.window')) as HTMLElement;
+        return {
+          left: Number.parseFloat(root.style.left),
+          width: Number.parseFloat(root.style.width),
+        };
+      };
+      const main = boxOf('main-window');
+      const checklist = boxOf('checklist-window');
+      // メインは最小幅 659 に持ち上がる (+ デスクトップ余白 8) ので、画像の座標のままでは
+      // チェックリストが潜り込む。重ならない位置まで右へ寄せる。
+      expect(checklist.left).toBeGreaterThanOrEqual(main.left + main.width);
+    } finally {
+      if (widthDesc) Object.defineProperty(window, 'innerWidth', widthDesc);
+      if (heightDesc) Object.defineProperty(window, 'innerHeight', heightDesc);
+    }
+  });
+
+  it.each([
+    [1920, 1080],
+    [1440, 900],
+    [1366, 768],
+  ])(
+    '画面 %ix%i でもチェックリストはサークルカットに重ならず画面に収まる',
+    async (width, height) => {
+      const widthDesc = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+      const heightDesc = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+      try {
+        render(<App startup={false} />);
+        expect(await screen.findByTestId('main-window')).toBeInTheDocument();
+
+        const boxOf = (id: string) => {
+          const element = screen.getByTestId(id);
+          const root = (element.matches('.window') ? element : element.querySelector('.window')) as HTMLElement;
+          return {
+            left: Number.parseFloat(root.style.left),
+            width: Number.parseFloat(root.style.width),
+            height: Number.parseFloat(root.style.height),
+          };
+        };
+        const main = boxOf('main-window');
+        const checklist = boxOf('checklist-window');
+        // メインは縮尺に関係なく最小幅 659 を守るので、画像の座標のままだとチェックリストが
+        // 右端寄せでメインの下へ潜る。重ならないよう幅を詰めて右へ寄せる。
+        expect(checklist.left).toBeGreaterThanOrEqual(main.left + main.width);
+        expect(checklist.left + checklist.width).toBeLessThanOrEqual(width - 8);
+        // 詰めても最小の大きさは割らない (割る画面では実物どおり重なる)。
+        expect(checklist.width).toBeGreaterThanOrEqual(362);
+        expect(checklist.height).toBeGreaterThanOrEqual(200);
+      } finally {
+        if (widthDesc) Object.defineProperty(window, 'innerWidth', widthDesc);
+        if (heightDesc) Object.defineProperty(window, 'innerHeight', heightDesc);
+      }
+    },
+  );
+
+  it('画面 1920x1080 では既定の 4 枚がどれも重ならない', async () => {
+    const widthDesc = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const heightDesc = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1080 });
+    try {
+      render(<App startup={false} />);
+      expect(await screen.findByTestId('main-window')).toBeInTheDocument();
+
+      const boxOf = (id: string) => {
+        const element = screen.getByTestId(id);
+        const root = (element.matches('.window') ? element : element.querySelector('.window')) as HTMLElement;
+        return {
+          left: Number.parseFloat(root.style.left),
+          top: Number.parseFloat(root.style.top),
+          width: Number.parseFloat(root.style.width),
+          height: Number.parseFloat(root.style.height),
+        };
+      };
+      const main = boxOf('main-window');
+      const detail = boxOf('detail-window');
+      const map = boxOf('map-window');
+      const checklist = boxOf('checklist-window');
+      const mainRight = main.left + main.width;
+      // メインの右に 詳細 → マップ の順で並べ、その下の帯にチェックリスト。
+      expect(detail.left).toBeGreaterThanOrEqual(mainRight);
+      expect(detail.top).toBe(main.top);
+      expect(map.top).toBe(main.top);
+      expect(map.left).toBeGreaterThanOrEqual(detail.left + detail.width);
+      expect(checklist.left).toBeGreaterThanOrEqual(mainRight);
+      for (const box of [detail, map, checklist]) {
+        expect(box.left + box.width).toBeLessThanOrEqual(1920 - 8);
+      }
+      expect(checklist.top).toBeGreaterThanOrEqual(detail.top + detail.height);
+    } finally {
+      if (widthDesc) Object.defineProperty(window, 'innerWidth', widthDesc);
+      if (heightDesc) Object.defineProperty(window, 'innerHeight', heightDesc);
+    }
+  });
+
+  it('画面が画像より小さいときは縦横同じ比率で縮む (縦だけ引き伸ばさない)', async () => {
+    const widthDesc = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const heightDesc = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1400 });
+    try {
+      render(<App startup={false} />);
+      expect(await screen.findByTestId('main-window')).toBeInTheDocument();
+
+      const boxOf = (id: string) => {
+        const element = screen.getByTestId(id);
+        const root = (element.matches('.window') ? element : element.querySelector('.window')) as HTMLElement;
+        return {
+          width: Number.parseFloat(root.style.width),
+          height: Number.parseFloat(root.style.height),
+        };
+      };
+      // 画像の縮尺は 1400/1966 = 0.712 (縦は 1400-28=1372 → 1372/940 = 1.46 なので横が効く)。
+      // 高さは画像の比率のまま縮むが、チェックリストはメインの右に収まるよう幅を詰める
+      // (右端 1392 - メインの右端 667 - 1px = 724)。
+      const checklist = boxOf('checklist-window');
+      expect(checklist.height).toBeCloseTo(369 * (1400 / 1966), -1);
+      expect(checklist.width).toBe(1400 - 8 - 668);
+      const map = boxOf('map-window');
+      expect(map.height).toBeCloseTo(528 * (1400 / 1966), -1);
+    } finally {
+      if (widthDesc) Object.defineProperty(window, 'innerWidth', widthDesc);
+      if (heightDesc) Object.defineProperty(window, 'innerHeight', heightDesc);
+    }
+  });
+
+  it('ウィンドウ位置を初期化 (60006) は取り込み画像の配置に戻し、他のウィンドウとダイアログを閉じる', async () => {
+    const { user } = await renderApp();
+
+    // 初期配置を控えておく。
+    const boxOf = (id: string) => {
+      const element = screen.getByTestId(id);
+      const root = (element.matches('.window') ? element : element.querySelector('.window')) as HTMLElement;
+      return `${root.style.left}/${root.style.top}/${root.style.width}/${root.style.height}`;
+    };
+    const mainBox = boxOf('main-window');
+
+    // サークル一覧とダイアログを開く (初期化で閉じる対象)。
+    await chooseMenu(user, 'ウィンドウ(W)', /^サークル一覧/);
+    expect(await screen.findByTestId('list-window')).toBeInTheDocument();
+    await chooseMenu(user, 'ファイル(F)', /^動作設定\(C\)\.\.\./);
+    expect(await screen.findByTestId('preferences-dialog')).toBeInTheDocument();
+
+    await chooseMenu(user, 'ウィンドウ(W)', /^ウィンドウ位置を初期化/);
+
+    // 取り込み画像の 4 枚だけになり、位置は初期配置のまま。他のダイアログは閉じる。
+    expect(screen.queryByTestId('list-window')).toBeNull();
+    expect(screen.queryByTestId('preferences-dialog')).toBeNull();
+    expect(screen.getByTestId('main-window')).toBeInTheDocument();
+    expect(screen.getByTestId('detail-window')).toBeInTheDocument();
+    expect(screen.getByTestId('map-window')).toBeInTheDocument();
+    expect(screen.getByTestId('checklist-window')).toBeInTheDocument();
+    expect(boxOf('main-window')).toBe(mainBox);
+  }, 30000);
 
   it('カットにはダミー画像が並ぶ', async () => {
     await renderApp();
@@ -457,7 +638,11 @@ describe('App — 検索 (メニューから開く)', () => {
 
 describe('App — サークル一覧のツールバー', () => {
   /** サークル一覧 (初期表示なのでメニューでトグルしない)。 */
-  async function openList() {
+  async function openList(user: UserEvent) {
+    // サークル一覧は既定では出さない (取り込み画像の配置に合わせて 4 枚だけ出す)。
+    const existing = screen.queryByTestId('list-window');
+    if (existing !== null) return existing;
+    await chooseMenu(user, 'ウィンドウ(W)', /^サークル一覧/);
     return screen.findByTestId('list-window');
   }
 
@@ -480,8 +665,8 @@ describe('App — サークル一覧のツールバー', () => {
   }
 
   it('一覧を開くと、最初の日付とブロックのサークルを出す', async () => {
-    await renderApp();
-    const list = await openList();
+    const { user } = await renderApp();
+    const list = await openList(user);
 
     const day = Math.min(...dummy.circles.map((circle) => circle.day).filter((value) => value > 0));
     // ブロックは日付ごとに違うので、その日付のサークルから最初のブロックを選ぶ。
@@ -501,7 +686,7 @@ describe('App — サークル一覧のツールバー', () => {
 
   it('表示モードを「日付／インデックス」にすると、選んだインデックスのサークルだけを出す', async () => {
     const { user } = await renderApp();
-    const list = await openList();
+    const list = await openList(user);
 
     await user.selectOptions(within(list).getByTestId('list-mode'), 'dateIndex');
     // 3 つ目は実物のブロック名 (あ〜れ / Ａ〜Ｒ / ア〜リ) をそのまま出す。
@@ -527,7 +712,7 @@ describe('App — サークル一覧のツールバー', () => {
 
   it('簡易検索ボックスはリターンキーで検索を実行し、件数をステータスバーに出す', async () => {
     const { user } = await renderApp();
-    const list = await openList();
+    const list = await openList(user);
 
     const keyword = dummy.circles[0].circleName;
     const expected = searchCircles(dummy as CatalogData, {
@@ -546,7 +731,7 @@ describe('App — サークル一覧のツールバー', () => {
 
   it('検索ボタンで検索ダイアログを開ける', async () => {
     const { user } = await renderApp();
-    const list = await openList();
+    const list = await openList(user);
 
     await user.click(within(list).getByRole('button', { name: '検索' }));
 
@@ -555,7 +740,7 @@ describe('App — サークル一覧のツールバー', () => {
 
   it('一覧で選んだサークルを「チェック解除」でチェックリストから外す', async () => {
     const { user } = await renderApp();
-    const list = await openList();
+    const list = await openList(user);
     const name = listedColumn(list, 'サークル名')[0] ?? '';
     expect(name.length).toBeGreaterThan(0);
 
@@ -600,7 +785,8 @@ describe('App — ウィンドウメニューとダイアログ', () => {
 describe('App — 起動シーケンス (元実装: 起動確認 → シリアル番号 → 情報送信)', () => {
   it('起動確認 → シリアル番号 → 情報送信 の順に進み、完了すると閉じる', async () => {
     const user = userEvent.setup();
-    render(<App />);
+    // 既定では起動シーケンスを出さないので、明示的に出す (実機と同じ流れ)。
+    render(<App startup />);
 
     const startup = await screen.findByTestId('startup-confirm-dialog');
     expect(startup).toHaveTextContent('コミックマーケット96');
@@ -1076,6 +1262,8 @@ describe('App — Google 検索・用紙・一覧追従・アイコン化・表�
   it('一覧の追従 (1022) を入れると、選んだサークルの日付とブロックへ一覧が切り替わる', async () => {
     const { user } = await renderApp();
     await toggleSetting(user, '選択サークルのブロックが変わった際にサークル一覧の表示も追従する');
+    // サークル一覧は既定では出さないので、メニューから開く。
+    await chooseMenu(user, 'ウィンドウ(W)', /^サークル一覧/);
 
     const targetPage = Math.max(...dummy.circles.map((circle) => circle.pageNo));
     await chooseMenu(user, 'ページ移動(J)', /^ページ指定で移動/);
@@ -1212,6 +1400,8 @@ describe('App — メニューの残り (ファイル / 表示 / ページ移動
 
   it('リスト中のカット表示 (32868) で一覧のカットの列を入れ外しできる', async () => {
     const { user } = await renderApp();
+    // サークル一覧は既定では出さないので、メニューから開く。
+    await chooseMenu(user, 'ウィンドウ(W)', /^サークル一覧/);
     const list = await screen.findByTestId('list-window');
     // 「リスト表示」の既定でサークルカットの列が出ている。
     expect(within(list).getAllByTestId('list-cut').length).toBeGreaterThan(0);
@@ -1558,7 +1748,7 @@ describe('App — 動作設定 (プロパティシート)', () => {
     );
     // サークル名は外せない (5LIST.HTM)。
     expect(within(checklist).getByRole('columnheader', { name: 'サークル名' })).toBeInTheDocument();
-  });
+  }, 30000);
 
   it('チェック色で表示色を変えると、チェックしたカットの色が変わる', async () => {
     const { user } = await renderApp();

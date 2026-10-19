@@ -128,42 +128,112 @@ type NavView = { pageNo: number; selectedId: number | null };
 const HISTORY_LIMIT = 100;
 
 /**
- * ウィンドウの初期配置。元実装の初期レイアウト (左にサークルカット / 右上にサークル詳細 /
- * 右下にチェックリスト) を基準に、画面が広いときは主要ウィンドウが重ならないように並べる
- * (地図だけは実物と同じ幅 690px を優先するので、右端でサークル詳細と少し重なる)。
- *
- * main 900x629 / checklist 900x396 は元アプリのウィンドウ実寸をそのまま使う。
- * 座標はライブラリのデスクトップ余白 8px を基準にし、隣り合うウィンドウの間を 8px 空ける
- * (Window の getResponsiveSize が x/y を 8 未満から 8 に持ち上げるため、0 起点だと重なる)。
+ * ウィンドウの初期配置。ユーザー提供の取り込み画像 (1966x940) のウィンドウ枠を 1px 単位で
+ * 実測した値をそのまま持つ (左にサークルカット / 右上にサークル詳細と会場マップ /
+ * 右下にチェックリスト)。画面が画像より小さいときは**縦横同じ比率**で縮める
+ * (横だけ・縦だけ縮めると配置が崩れる)。大きい画面では画像の実寸のまま置く
+ * (ウィンドウの中身は 105x150 のカットなど実寸で組んであるので、拡大しても余白が増えるだけ)。
  */
-const LAYOUT_WIDE: Record<LayoutName, WindowBox> = {
-  // 1920x1080 の画面に主要な 5 枚を並べる寸法。地図は実物と同じ 690x542 (MapWindow の
-  // 最小幅) なので、1920px 幅では右端でサークル詳細と少し重なる (実物の初期配置も
-  // カット/一覧/地図が重なっている)。x はデスクトップの右端 8px 内側に合わせる。
-  main: { x: 8, y: 8, width: 856, height: 600 },
-  detail: { x: 872, y: 8, width: 500, height: 600 },
-  map: { x: 1222, y: 8, width: 690, height: 560 },
-  checklist: { x: 8, y: 616, width: 782, height: 390 },
-  list: { x: 798, y: 616, width: 714, height: 390 },
+const LAYOUT_IMAGE = { width: 1966, height: 940 };
+
+/** 取り込み画像でのウィンドウの位置と大きさ (枠の外側)。 */
+const LAYOUT_BOX: Record<LayoutName, WindowBox> = {
+  main: { x: 4, y: 11, width: 657, height: 925 },
+  detail: { x: 666, y: 12, width: 496, height: 554 },
+  map: { x: 1165, y: 12, width: 796, height: 528 },
+  checklist: { x: 662, y: 567, width: 1299, height: 369 },
+  // 画像に無い 2 枚 (メニューから開く) は、チェックリストと同じ帯に置く。
+  list: { x: 662, y: 567, width: 1299, height: 369 },
   search: { x: 608, y: 128, width: 620, height: 470 },
 };
 
+/** タスクバーの高さ (画面下に貼り付く。ウィンドウはこの上に並べる)。 */
+const TASKBAR_HEIGHT = 28;
+
+/** 隣り合うウィンドウの隙間 (取り込み画像の実測値と同じ 1px)。 */
+const LAYOUT_GAP = 1;
+
 /**
- * 1366x768 級の画面用。4 画面まで並べ、地図と検索は必要なときに開く。
- * (実測でも元アプリの初期表示は カット+詳細 の 2 枚だけ。広い画面では見やすさを優先して増やす)
+ * ウィンドウの最小の大きさ (各ウィンドウが `style` で持つ minWidth / minHeight と同じ値。
+ * これを下回ると中身 (ツールバー 1 行など) が入らない)。
  */
-const LAYOUT_COMPACT: Record<LayoutName, WindowBox> = {
-  // メインは実物の既定ツールバー (4 本 = 22 ボタン + ツールバー内のコンボ / Edit) が
-  // 1 行で入る幅にする。実物のウィンドウは 961x751 (実測スクリーンショット) で、
-  // ツールバーは折り返さず 1 行。
-  main: { x: 8, y: 8, width: 960, height: 600 },
-  detail: { x: 976, y: 8, width: 500, height: 600 },
-  checklist: { x: 8, y: 616, width: 900, height: 310 },
-  list: { x: 916, y: 616, width: 460, height: 310 },
-  // 狭い画面では 5 枚は重なる (実物もカット/一覧/地図が重なっている)。地図は動かして使う。
-  map: { x: 120, y: 120, width: 700, height: 500 },
-  search: { x: 520, y: 70, width: 620, height: 470 },
+const WINDOW_MIN_SIZE: Record<LayoutName, { width: number; height: number }> = {
+  main: { width: 659, height: 240 },
+  detail: { width: 500, height: 240 },
+  map: { width: 690, height: 300 },
+  checklist: { width: 362, height: 200 },
+  list: { width: 320, height: 200 },
+  search: { width: 320, height: 200 },
 };
+
+/**
+ * 取り込み画像の配置を、いまの画面に合わせた px にする。
+ * 画像より小さい画面では縦横**同じ**比率で縮め (1 を超えて拡大はしない)、
+ * 位置は画面の外に出ないように寄せる。最小の大きさは守るので、入りきらない画面では
+ * 実物と同じく重なる (並び順は画像のまま)。
+ */
+function layoutFor(width: number, height: number): Record<LayoutName, WindowBox> {
+  const areaWidth = Math.max(320, width);
+  const areaHeight = Math.max(240, height - TASKBAR_HEIGHT);
+  const scale = Math.min(
+    1,
+    areaWidth / LAYOUT_IMAGE.width,
+    areaHeight / LAYOUT_IMAGE.height,
+  );
+  const boxes = Object.entries(LAYOUT_BOX).map(([key, source]) => {
+    const min = WINDOW_MIN_SIZE[key as LayoutName];
+    const box = {
+      width: Math.max(min.width, Math.round(source.width * scale)),
+      height: Math.max(min.height, Math.round(source.height * scale)),
+    };
+    return [
+      key,
+      {
+        x: Math.max(8, Math.min(Math.round(source.x * scale), areaWidth - box.width - 8)),
+        y: Math.max(8, Math.min(Math.round(source.y * scale), areaHeight - box.height - 8)),
+        ...box,
+      },
+    ];
+  });
+  const layout = Object.fromEntries(boxes) as Record<LayoutName, WindowBox>;
+  // メイン (サークルカット) は画像の 657 より最小幅 659 が広く、x もデスクトップ余白 8 へ
+  // 持ち上がるので、画像の座標のままだと右側のウィンドウがメインの下へ潜る。
+  // メインの右端 + 1px から右へ並べ直し、画面の右端 8px に収まらない分は幅を詰める。
+  const mainRight = layout.main.x + layout.main.width;
+  const rightLimit = areaWidth - 8;
+
+  // 上段 (サークル詳細 + 会場マップ) は 2 枚で 1 組。最小の大きさで収まらない画面では
+  // 並べ直さず、画像の座標のまま置く (実物と同じく重なる)。
+  const detailX = Math.max(layout.detail.x, mainRight + LAYOUT_GAP);
+  const detailWidth = Math.min(layout.detail.width, rightLimit - detailX);
+  const mapX = Math.max(layout.map.x, detailX + detailWidth + LAYOUT_GAP);
+  const mapWidth = Math.min(layout.map.width, rightLimit - mapX);
+  if (
+    detailWidth >= WINDOW_MIN_SIZE.detail.width &&
+    mapWidth >= WINDOW_MIN_SIZE.map.width
+  ) {
+    layout.detail = { ...layout.detail, x: detailX, width: detailWidth };
+    layout.map = { ...layout.map, x: mapX, width: mapWidth };
+  }
+
+  // 上段の 2 枚はメインと同じ Y から始める。画像の実測はメイン 11 / 詳細・マップ 12 で
+  // 1px 下がっているが、枠の上端を揃える (メインが下側の余白で持ち上がる画面にも追従)。
+  layout.detail = { ...layout.detail, y: layout.main.y };
+  layout.map = { ...layout.map, y: layout.main.y };
+
+  // 下段 (チェックリスト / サークル一覧) も同じ帯なので同じ扱い。
+  for (const key of ['checklist', 'list'] as const) {
+    const box = layout[key];
+    const x = Math.max(box.x, mainRight + LAYOUT_GAP);
+    const width = Math.min(box.width, rightLimit - x);
+    layout[key] =
+      width >= WINDOW_MIN_SIZE[key].width
+        ? { ...box, x, width }
+        : // 幅を詰めても最小の大きさに入らない画面では、実物と同じく右端に寄せて重なる。
+          { ...box, x: Math.max(8, rightLimit - box.width) };
+  }
+  return layout;
+}
 
 /** メインウィンドウのジャンプ 3 つ (日付 / ホール / インデックス) が送るコマンド ID の先頭。 */
 const COMMAND_JUMP_DAY = 34000;
@@ -260,16 +330,22 @@ const HELP_MODES: Record<number, HelpPane> = {
 /** サポートページ (元実装の「サポートページ」)。 */
 const SUPPORT_URL = 'https://github.com/MegaBlackLabel/ccatalog-web-port';
 
-export default function App({ startup = true }: { startup?: boolean } = {}) {
+/**
+ * 起動シーケンス (起動確認 → シリアル番号入力 → 情報送信の確認) は既定で出さない
+ * (ユーザー指示。`<App startup />` で実機と同じシーケンスを出せる)。
+ */
+export default function App({ startup = false }: { startup?: boolean } = {}) {
   const { state, dispatch } = useCatalog();
 
-  // 1920x1080 以上なら主要 5 ウィンドウを重ねずに並べる (LAYOUT_WIDE の全体 1912x1006)。
-  const [wideLayout] = useState(() => window.innerWidth >= 1920 && window.innerHeight >= 1040);
-  const layout = wideLayout ? LAYOUT_WIDE : LAYOUT_COMPACT;
+  // ウィンドウの配置は取り込み画像の割合から (起動時の画面の大きさで決める)。
+  // 「ウィンドウ位置を初期化」で作り直すため、key を替えて Window をマウントし直す。
+  const [layoutKey, setLayoutKey] = useState(0);
+  const [layout, setLayout] = useState(() => layoutFor(window.innerWidth, window.innerHeight));
 
   const [searchOpen, setSearchOpen] = useState(false);
-  // 実装済みのウィンドウは最初から全部出す (ユーザー指示)。狭い画面では重なるが動かせる。
-  const [listOpen, setListOpen] = useState(true);
+  // 既定で出すのは取り込み画像と同じ 4 枚 (カット / 詳細 / マップ / チェックリスト)。
+  // サークル一覧と検索は「ウィンドウ」メニューから開く。
+  const [listOpen, setListOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(true);
   const [checklistOpen, setChecklistOpen] = useState(true);
   const [mapOpen, setMapOpen] = useState(true);
@@ -1171,6 +1247,32 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
     onPreview: openPrintPreview,
   };
 
+  /**
+   * ウィンドウ位置を初期状態に戻す (ウィンドウ メニュー 60006)。取り込み画像と同じ 4 枚を
+   * 初期配置で出し直し、それ以外のウィンドウとダイアログは閉じる。ライブラリの Window は
+   * 初期位置をマウント時にしか読まないので、配置を計算し直して key を替え、作り直す。
+   */
+  const resetWindows = useCallback(() => {
+    setLayout(layoutFor(window.innerWidth, window.innerHeight));
+    setLayoutKey((key) => key + 1);
+    setDetailOpen(true);
+    setChecklistOpen(true);
+    setMapOpen(true);
+    setListOpen(false);
+    setSearchOpen(false);
+    setPreviewOpen(false);
+    setPageSetupOpen(false);
+    setPrintSettingsOpen(false);
+    setImageDetailsOpen(false);
+    setImageHelpOpen(false);
+    setGotoPageOpen(false);
+    setAboutOpen(false);
+    setCoverOpen(false);
+    setMemoTarget(null);
+    setHelpPane(null);
+    setDialog(null);
+  }, []);
+
   const handleCommand = useCallback(
     (command: number) => {
       // ジャンプ操作ツールバーの 3 つは元実装のメニュー ID 帯の外にあるため、アプリ側で割り当てた。
@@ -1435,10 +1537,11 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
           setMessage('子ウィンドウを表示しました');
           break;
         case WINDOW_MENU_COMMANDS.resetPositions:
+          resetWindows();
           setPageNo(null);
           setZoom(1);
           setMapZoom(0.5);
-          setMessage('表示位置を初期状態に戻しました');
+          setMessage('ウィンドウ位置を初期状態に戻しました');
           break;
         default: {
           // 表示 > ツールバー (32839〜32847) はドッキング ツールバー 5 本の表示 ON / OFF。
@@ -1471,6 +1574,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
       lastPage,
       openCircleLink,
       openGoogleSearch,
+      resetWindows,
       pageCircles,
       pasteCircles,
       saveChecklist,
@@ -1577,6 +1681,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
   return (
     <Win98Provider className="desktop">
       <MainWindow
+        key={`main-${layoutKey}`}
         title={windowTitle}
         initialX={layout.main.x}
         initialY={layout.main.y}
@@ -1618,6 +1723,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
 
       {detailOpen && (
         <DetailWindow
+          key={`detail-${layoutKey}`}
           initialX={layout.detail.x}
           initialY={layout.detail.y}
           width={layout.detail.width}
@@ -1647,6 +1753,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
 
       {checklistOpen && (
         <ChecklistWindow
+          key={`checklist-${layoutKey}`}
           initialX={layout.checklist.x}
           initialY={layout.checklist.y}
           width={layout.checklist.width}
@@ -1675,6 +1782,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
 
       {mapOpen && (
         <MapWindow
+          key={`map-${layoutKey}`}
           initialX={layout.map.x}
           initialY={layout.map.y}
           width={layout.map.width}
@@ -1738,6 +1846,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
       <div style={DIALOG_LAYER_STYLE}>
       {searchOpen && (
         <SearchWindow
+          key={`search-${layoutKey}`}
           initialX={layout.search.x}
           initialY={layout.search.y}
           width={layout.search.width}
@@ -1911,6 +2020,7 @@ export default function App({ startup = true }: { startup?: boolean } = {}) {
       {previewOpen && (
         <div style={DIALOG_LIFT_STYLE}>
         <PrintPreviewWindow
+          key={`preview-${layoutKey}`}
           title={preview.title}
           pageCount={preview.pageCount}
           pageNo={preview.pageNo}
