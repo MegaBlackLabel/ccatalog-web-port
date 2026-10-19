@@ -3,7 +3,6 @@ import {
   Dropdown,
   Groove,
   StatusBar,
-  StatusBarField,
   TextBox,
   Toolbar,
   ToolbarBand,
@@ -234,10 +233,6 @@ export function MapWindow({
   const mapHeight = activeMap?.h ?? DEFAULT_MAP_HEIGHT;
   const deskWidth = info?.mapSizeW || DEFAULT_DESK_WIDTH;
   const deskHeight = info?.mapSizeH || DEFAULT_DESK_HEIGHT;
-  const circleCount = entries.reduce(
-    (count, entry) => count + (entry.seatA.circle === null ? 0 : 1) + (entry.seatB.circle === null ? 0 : 1),
-    0,
-  );
   // 表示倍率は 25%〜300% の範囲に収める (元実装のズームボックスの範囲)。
   const clampZoom = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
   // ズームボタンは 25% 刻み。
@@ -340,11 +335,9 @@ export function MapWindow({
       initialY={initialY}
       zIndex={zIndex}
       style={{ minWidth }}
-      statusBar={
-        <StatusBar>
-          <StatusBarField>{circleCount} 件のサークルが表示されています</StatusBarField>
-        </StatusBar>
-      }
+      // ステータスバーは文字を出さない (実機の会場マップは下端まで地図。
+      // サークルカット ウィンドウのステータスバーも通常は空)。
+      statusBar={<StatusBar />}
     >
       <ToolbarBand
         data-testid="map-toolbar"
